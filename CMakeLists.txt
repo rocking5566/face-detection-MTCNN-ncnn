@@ -23,7 +23,7 @@ if (UNIX)
 	SET(NCNN_LIBS ${NCNN_DIR}/lib/linux/x64/gcc5.4/libncnn.a)
 endif (UNIX)
 
-include_directories(${OPENCV_DIR}/include)
+include_directories(${OpenCV_DIR}/include)
 include_directories(${NCNN_DIR}/include)
 
 add_executable(mtcnn ${SRC})
