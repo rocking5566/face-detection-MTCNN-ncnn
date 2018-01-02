@@ -58,7 +58,7 @@ public:
     void Detect(const SImage& img, std::vector<SBoundingBox>& result);
 
 private:
-    void CMtcnn::Detect(ncnn::Mat& img_, std::vector<SBoundingBox>& finalBbox_);
+    void Detect(ncnn::Mat& img_, std::vector<SBoundingBox>& finalBbox_);
     void GenerateBbox(ncnn::Mat score, ncnn::Mat location, std::vector<SBoundingBox>& boundingBox_, std::vector<SOrderScore>& bboxScore_, float scale);
     void Nms(std::vector<SBoundingBox> &boundingBox_, std::vector<SOrderScore> &bboxScore_, const float overlap_threshold, std::string modelname = "Union");
     void RefineAndSquareBbox(std::vector<SBoundingBox> &vecBbox, const int &height, const int &width);
