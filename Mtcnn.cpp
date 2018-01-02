@@ -168,6 +168,14 @@ void CMtcnn::RefineAndSquareBbox(vector<SBoundingBox> &vecBbox, const int &heigh
         }
     }
 }
+
+void CMtcnn::Detect(const SImage& img, std::vector<SBoundingBox>& result)
+{
+    int ncnnType = ncnn::Mat::PIXEL_BGR2RGB;
+    ncnn::Mat ncnn_img = ncnn::Mat::from_pixels(img.m_Data, ncnnType, img.m_Width, img.m_Height);
+    Detect(ncnn_img, result);
+}
+
 void CMtcnn::Detect(ncnn::Mat& img_, std::vector<SBoundingBox>& finalBbox_)
 {
     m_firstBbox_.clear();

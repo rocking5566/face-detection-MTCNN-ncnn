@@ -25,6 +25,28 @@ struct SOrderScore
     int oriOrder;
 };
 
+enum imageType
+{
+    eBGR
+};
+
+struct SImage
+{
+    SImage(unsigned char* data, unsigned int width, unsigned int height, imageType type)
+        : m_Data(data)
+        , m_Width(width)
+        , m_Height(height)
+        , m_Type(type)
+    { 
+
+    }
+
+    unsigned char* m_Data;
+    unsigned int m_Width;
+    unsigned int m_Height;
+    imageType m_Type;
+};
+
 class CMtcnn
 {
 public:
@@ -32,9 +54,11 @@ public:
     void LoadModel(const char* pNetStructPath, const char* pNetWeightPath
                  , const char* rNetStructPath, const char* rNetWeightPath
                  , const char* oNetStructPath, const char* oNetWeightPath);
-    void Detect(ncnn::Mat& img_, std::vector<SBoundingBox>& finalBbox);
+
+    void Detect(const SImage& img, std::vector<SBoundingBox>& result);
 
 private:
+    void CMtcnn::Detect(ncnn::Mat& img_, std::vector<SBoundingBox>& finalBbox_);
     void GenerateBbox(ncnn::Mat score, ncnn::Mat location, std::vector<SBoundingBox>& boundingBox_, std::vector<SOrderScore>& bboxScore_, float scale);
     void Nms(std::vector<SBoundingBox> &boundingBox_, std::vector<SOrderScore> &bboxScore_, const float overlap_threshold, std::string modelname = "Union");
     void RefineAndSquareBbox(std::vector<SBoundingBox> &vecBbox, const int &height, const int &width);

@@ -42,10 +42,9 @@ int main(int argc, char** argv)
         cap >> frame;
 
         std::vector<SBoundingBox> finalBbox;
-        ncnn::Mat ncnn_img = ncnn::Mat::from_pixels(frame.data, ncnn::Mat::PIXEL_BGR2RGB, frame.cols, frame.rows);
 
         double t1 = (double)getTickCount();
-        mtcnn.Detect(ncnn_img, finalBbox);
+        mtcnn.Detect(SImage(frame.data, frame.cols, frame.rows, eBGR), finalBbox);
         double t2 = (double)getTickCount();
         double t = 1000 * double(t2 - t1) / getTickFrequency();
         cout << "time = " << t << " ms, FPS = " << 1000 / t << endl;
