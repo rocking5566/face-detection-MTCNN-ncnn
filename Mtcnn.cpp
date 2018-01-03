@@ -50,22 +50,22 @@ void CMtcnn::LoadModel(const char* pNetStructPath, const char* pNetWeightPath, c
     m_Onet.load_model(oNetWeightPath);
 }
 
-void CMtcnn::SetParam(unsigned int width, unsigned int height, imageType type /*= eBGR*/, int iMinFaceSize /*= 90*/, float fPyramidFactor /*= 0.709*/)
+void CMtcnn::SetParam(unsigned int width, unsigned int height, imageType type /*= eBGR*/, int iMinSize /*= 90*/, float fPyramidFactor /*= 0.709*/)
 {
     m_ImgWidth = width;
     m_ImgHeight = height;
     m_ImgType = type;
 
-    m_pyramidScale = GetPyramidScale(width, height, iMinFaceSize, fPyramidFactor);
+    m_pyramidScale = GetPyramidScale(width, height, iMinSize, fPyramidFactor);
 }
 
-std::vector<float> CMtcnn::GetPyramidScale(unsigned int width, unsigned int height, int iMinFaceSize /*= 90*/, float fPyramidFactor /*= 0.709*/)
+std::vector<float> CMtcnn::GetPyramidScale(unsigned int width, unsigned int height, int iMinSize, float fPyramidFactor)
 {
     vector<float> retScale;
     float minl = width < height ? width : height;
     float MIN_DET_SIZE = 12;
 
-    float m = MIN_DET_SIZE / iMinFaceSize;
+    float m = MIN_DET_SIZE / iMinSize;
     minl = minl * m;
 
     while (minl > MIN_DET_SIZE)

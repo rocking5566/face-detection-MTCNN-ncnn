@@ -39,7 +39,7 @@ public:
                  , const char* oNetStructPath, const char* oNetWeightPath);
 
     // Can be called in any time
-    void SetParam(unsigned int width, unsigned int height, imageType type = eBGR, int iMinFaceSize = 90, float fPyramidFactor = 0.709);
+    void SetParam(unsigned int width, unsigned int height, imageType type = eBGR, int iMinSize = 90, float fPyramidFactor = 0.709);
     void Detect(const unsigned char* img, std::vector<SBoundingBox>& result);
 
 private:
@@ -47,7 +47,7 @@ private:
     void Nms(std::vector<SBoundingBox> &boundingBox_, std::vector<SOrderScore> &bboxScore_, const float overlap_threshold, std::string modelname = "Union");
     void RefineAndSquareBbox(std::vector<SBoundingBox> &vecBbox, const int &height, const int &width);
 
-    std::vector<float> GetPyramidScale(unsigned int width, unsigned int height, int iMinFaceSize = 90, float fPyramidFactor = 0.709);
+    std::vector<float> GetPyramidScale(unsigned int width, unsigned int height, int iMinSize, float fPyramidFactor);
 
 private:
     ncnn::Net m_Pnet;
