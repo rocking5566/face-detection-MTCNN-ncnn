@@ -99,7 +99,7 @@ void CMtcnn::GenerateBbox(ncnn::Mat score, ncnn::Mat location, std::vector<SBoun
             {
                 bbox.score = *p;
                 order.score = *p;
-                order.oriOrder = count;
+                order.oriOrder = count++;
                 bbox.x1 = round((stride*col + 1) / scale);
                 bbox.y1 = round((stride*row + 1) / scale);
                 bbox.x2 = round((stride*col + 1 + cellsize) / scale);
@@ -110,10 +110,9 @@ void CMtcnn::GenerateBbox(ncnn::Mat score, ncnn::Mat location, std::vector<SBoun
                     bbox.regreCoord[channel] = location.channel(channel)[0];
                 boundingBox_.push_back(bbox);
                 bboxScore_.push_back(order);
-                count++;
             }
-            p++;
-            plocal++;
+            ++p;
+            ++plocal;
         }
     }
 }
