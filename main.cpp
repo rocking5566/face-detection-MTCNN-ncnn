@@ -35,19 +35,30 @@ int main(int argc, char** argv)
 
     Mat frame;
     CMtcnn mtcnn;
+    bool bSetParamToMtcnn = false;
     mtcnn.LoadModel("det1.param", "det1.bin", "det2.param", "det2.bin", "det3.param", "det3.bin");
+
+    double sumMs = 0;
+    int count = 0;
 
     while (1)
     {
         cap >> frame;
-
         std::vector<SBoundingBox> finalBbox;
 
+        if (!bSetParamToMtcnn && frame.cols > 0)
+        {
+            mtcnn.SetParam(frame.cols, frame.rows, eBGR, 90, 0.709);
+            bSetParamToMtcnn = true;
+        }
+
         double t1 = (double)getTickCount();
-        mtcnn.Detect(SImage(frame.data, frame.cols, frame.rows, eBGR), finalBbox);
+        mtcnn.Detect(frame.data, finalBbox);
         double t2 = (double)getTickCount();
         double t = 1000 * double(t2 - t1) / getTickFrequency();
-        cout << "time = " << t << " ms, FPS = " << 1000 / t << endl;
+        sumMs += t;
+        ++count;
+        cout << "time = " << t << " ms, FPS = " << 1000 / t << ", Average time = " << sumMs / count <<endl;
 
         PlotDetectionResult(frame, finalBbox);
 

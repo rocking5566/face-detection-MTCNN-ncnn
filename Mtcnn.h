@@ -30,23 +30,6 @@ enum imageType
     eBGR
 };
 
-struct SImage
-{
-    SImage(unsigned char* data, unsigned int width, unsigned int height, imageType type)
-        : m_Data(data)
-        , m_Width(width)
-        , m_Height(height)
-        , m_Type(type)
-    { 
-
-    }
-
-    unsigned char* m_Data;
-    unsigned int m_Width;
-    unsigned int m_Height;
-    imageType m_Type;
-};
-
 class CMtcnn
 {
 public:
@@ -55,29 +38,25 @@ public:
                  , const char* rNetStructPath, const char* rNetWeightPath
                  , const char* oNetStructPath, const char* oNetWeightPath);
 
-    void Detect(const SImage& img, std::vector<SBoundingBox>& result);
+    // Can be called in any time
+    void SetParam(unsigned int width, unsigned int height, imageType type = eBGR, int iMinFaceSize = 90, float fPyramidFactor = 0.709);
+    void Detect(const unsigned char* img, std::vector<SBoundingBox>& result);
 
 private:
-    void Detect(ncnn::Mat& img_, std::vector<SBoundingBox>& finalBbox_);
     void GenerateBbox(ncnn::Mat score, ncnn::Mat location, std::vector<SBoundingBox>& boundingBox_, std::vector<SOrderScore>& bboxScore_, float scale);
     void Nms(std::vector<SBoundingBox> &boundingBox_, std::vector<SOrderScore> &bboxScore_, const float overlap_threshold, std::string modelname = "Union");
     void RefineAndSquareBbox(std::vector<SBoundingBox> &vecBbox, const int &height, const int &width);
+
+    std::vector<float> GetPyramidScale(unsigned int width, unsigned int height, int iMinFaceSize = 90, float fPyramidFactor = 0.709);
 
 private:
     ncnn::Net m_Pnet;
     ncnn::Net m_Rnet;
     ncnn::Net m_Onet;
-    ncnn::Mat m_img;
 
-    const float m_nmsThreshold[3] = { 0.5f, 0.7f, 0.7f };
-    const float m_threshold[3] = { 0.6f, 0.6f, 0.6f };
-    const float m_mean_vals[3] = { 127.5, 127.5, 127.5 };
-    const float m_norm_vals[3] = { 0.0078125, 0.0078125, 0.0078125 };
-    std::vector<SBoundingBox> m_firstBbox_;
-    std::vector<SBoundingBox> m_secondBbox_;
-    std::vector<SBoundingBox> m_thirdBbox_;
-    std::vector<SOrderScore> m_firstOrderScore_, m_secondBboxScore_, m_thirdBboxScore_;
     int m_ImgWidth;
     int m_ImgHeight;
+    imageType m_ImgType;
+    std::vector<float> m_pyramidScale;
 };
 #endif // Mtcnn_h__

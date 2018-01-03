@@ -1,8 +1,14 @@
 #include "Mtcnn.h"
 #include "net.h"
 #include <cmath>
+#include <iostream>
 
 using namespace std;
+
+const float m_nmsThreshold[3] = { 0.5f, 0.7f, 0.7f };
+const float m_threshold[3] = { 0.6f, 0.6f, 0.6f };
+const float m_mean_vals[3] = { 127.5, 127.5, 127.5 };
+const float m_norm_vals[3] = { 0.0078125, 0.0078125, 0.0078125 };
 
 bool cmpScore(SOrderScore lsh, SOrderScore rsh)
 {
@@ -12,8 +18,25 @@ bool cmpScore(SOrderScore lsh, SOrderScore rsh)
         return false;
 }
 
-CMtcnn::CMtcnn()
+int GetNcnnImageConvertType(imageType type)
 {
+    switch (type)
+    {
+    case eBGR:
+    default:
+        return ncnn::Mat::PIXEL_BGR2RGB;
+
+    }
+}
+
+CMtcnn::CMtcnn()
+    : m_ImgType(eBGR)
+    , m_ImgWidth(0)
+    , m_ImgHeight(0)
+{
+    // [TODO] - Refine naming and refactor code
+    // Re-implement from the following link
+    // https://github.com/kpzhang93/MTCNN_face_detection_alignment/tree/master/code/codes/MTCNNv1
 }
 
 
@@ -27,6 +50,37 @@ void CMtcnn::LoadModel(const char* pNetStructPath, const char* pNetWeightPath, c
     m_Onet.load_model(oNetWeightPath);
 }
 
+void CMtcnn::SetParam(unsigned int width, unsigned int height, imageType type /*= eBGR*/, int iMinFaceSize /*= 90*/, float fPyramidFactor /*= 0.709*/)
+{
+    m_ImgWidth = width;
+    m_ImgHeight = height;
+    m_ImgType = type;
+
+    m_pyramidScale = GetPyramidScale(width, height, iMinFaceSize, fPyramidFactor);
+}
+
+std::vector<float> CMtcnn::GetPyramidScale(unsigned int width, unsigned int height, int iMinFaceSize /*= 90*/, float fPyramidFactor /*= 0.709*/)
+{
+    vector<float> retScale;
+    float minl = width < height ? width : height;
+    float MIN_DET_SIZE = 12;
+
+    float m = MIN_DET_SIZE / iMinFaceSize;
+    minl = minl * m;
+
+    while (minl > MIN_DET_SIZE)
+    {
+        if (!retScale.empty())
+        {
+            m = m * fPyramidFactor;
+        }
+
+        retScale.push_back(m);
+        minl = minl * fPyramidFactor;
+    }
+
+    return std::move(retScale);
+}
 void CMtcnn::GenerateBbox(ncnn::Mat score, ncnn::Mat location, std::vector<SBoundingBox>& boundingBox_, std::vector<SOrderScore>& bboxScore_, float scale)
 {
     int stride = 2;
@@ -169,110 +223,89 @@ void CMtcnn::RefineAndSquareBbox(vector<SBoundingBox> &vecBbox, const int &heigh
     }
 }
 
-void CMtcnn::Detect(const SImage& img, std::vector<SBoundingBox>& result)
+void CMtcnn::Detect(const unsigned char* img, std::vector<SBoundingBox>& result)
 {
-    int ncnnType = ncnn::Mat::PIXEL_BGR2RGB;
-    ncnn::Mat ncnn_img = ncnn::Mat::from_pixels(img.m_Data, ncnnType, img.m_Width, img.m_Height);
-    Detect(ncnn_img, result);
-}
+    std::vector<SBoundingBox> firstBbox;
+    std::vector<SBoundingBox> secondBbox;
+    std::vector<SBoundingBox> thirdBbox;
+    std::vector<SOrderScore> firstOrderScore;
+    std::vector<SOrderScore> secondBboxScore;
+    std::vector<SOrderScore> thirdBboxScore;
 
-void CMtcnn::Detect(ncnn::Mat& img_, std::vector<SBoundingBox>& finalBbox_)
-{
-    m_firstBbox_.clear();
-    m_firstOrderScore_.clear();
-    m_secondBbox_.clear();
-    m_secondBboxScore_.clear();
-    m_thirdBbox_.clear();
-    m_thirdBboxScore_.clear();
+    ncnn::Mat ncnnImg = ncnn::Mat::from_pixels(img, GetNcnnImageConvertType(eBGR), m_ImgWidth, m_ImgHeight);
+    ncnnImg.substract_mean_normalize(m_mean_vals, m_norm_vals);
 
-    m_img = img_;
-    m_ImgWidth = m_img.w;
-    m_ImgHeight = m_img.h;
-    m_img.substract_mean_normalize(m_mean_vals, m_norm_vals);
-
-    float minl = m_ImgWidth<m_ImgHeight ? m_ImgWidth : m_ImgHeight;
-    int MIN_DET_SIZE = 12;
-    int minsize = 90;
-    float m = (float)MIN_DET_SIZE / minsize;
-    minl *= m;
-    float factor = 0.709;
-    int factor_count = 0;
-    vector<float> scales_;
-    while (minl>MIN_DET_SIZE)
-    {
-        if (factor_count>0)m = m*factor;
-        scales_.push_back(m);
-        minl *= factor;
-        factor_count++;
-    }
     SOrderScore order;
-    int count = 0;
 
-    for (size_t i = 0; i < scales_.size(); i++)
+    //First stage
+    for (size_t i = 0; i < m_pyramidScale.size(); ++i)
     {
-        int hs = (int)ceil(m_ImgHeight*scales_[i]);
-        int ws = (int)ceil(m_ImgWidth*scales_[i]);
-        //ncnn::Mat in = ncnn::Mat::from_pixels_resize(image_data, ncnn::Mat::PIXEL_RGB2BGR, img_w, img_h, ws, hs);
-        ncnn::Mat in;
-        resize_bilinear(m_img, in, ws, hs);
-        //in.substract_mean_normalize(mean_vals, norm_vals);
+        ncnn::Mat score;
+        ncnn::Mat location;
+        std::vector<SBoundingBox> boundingBox;
+        std::vector<SOrderScore> bboxScore;
+
+        int hs = (int)ceil(m_ImgHeight * m_pyramidScale[i]);
+        int ws = (int)ceil(m_ImgWidth * m_pyramidScale[i]);
+        ncnn::Mat pyramidImg;
+        resize_bilinear(ncnnImg, pyramidImg, ws, hs);
         ncnn::Extractor ex = m_Pnet.create_extractor();
         ex.set_light_mode(true);
-        ex.input("data", in);
-        ncnn::Mat score_, location_;
-        ex.extract("prob1", score_);
-        ex.extract("conv4-2", location_);
-        std::vector<SBoundingBox> boundingBox_;
-        std::vector<SOrderScore> bboxScore_;
-        GenerateBbox(score_, location_, boundingBox_, bboxScore_, scales_[i]);
-        Nms(boundingBox_, bboxScore_, m_nmsThreshold[0]);
+        // [TODO] - Check if need to set_num_threads
+        ex.input("data", pyramidImg);
+        ex.extract("prob1", score);
+        ex.extract("conv4-2", location);
+        GenerateBbox(score, location, boundingBox, bboxScore, m_pyramidScale[i]);
+        Nms(boundingBox, bboxScore, m_nmsThreshold[0]);
 
-        for (vector<SBoundingBox>::iterator it = boundingBox_.begin(); it != boundingBox_.end(); it++)
+        for (vector<SBoundingBox>::iterator it = boundingBox.begin(); it != boundingBox.end(); it++)
         {
             if ((*it).bExist)
             {
-                m_firstBbox_.push_back(*it);
+                firstBbox.push_back(*it);
                 order.score = (*it).score;
-                order.oriOrder = count;
-                m_firstOrderScore_.push_back(order);
-                count++;
+                order.oriOrder = firstOrderScore.size();
+                firstOrderScore.push_back(order);
             }
         }
-        bboxScore_.clear();
-        boundingBox_.clear();
     }
-    //the first stage's nms
-    if (count<1)return;
-    Nms(m_firstBbox_, m_firstOrderScore_, m_nmsThreshold[0]);
-    RefineAndSquareBbox(m_firstBbox_, m_ImgHeight, m_ImgWidth);
-    //printf("firstBbox_.size()=%d\n", firstBbox_.size());
+
+    if (firstOrderScore.empty())
+        return;
+
+    Nms(firstBbox, firstOrderScore, m_nmsThreshold[0]);
+    RefineAndSquareBbox(firstBbox, m_ImgHeight, m_ImgWidth);
 
     //second stage
-    count = 0;
-    for (vector<SBoundingBox>::iterator it = m_firstBbox_.begin(); it != m_firstBbox_.end(); it++)
+    for (vector<SBoundingBox>::iterator it = firstBbox.begin(); it != firstBbox.end(); it++)
     {
         if ((*it).bExist)
         {
-            ncnn::Mat tempIm;
-            copy_cut_border(m_img, tempIm, (*it).y1, m_ImgHeight - (*it).y2, (*it).x1, m_ImgWidth - (*it).x2);
-            ncnn::Mat in;
-            resize_bilinear(tempIm, in, 24, 24);
+            ncnn::Mat tempImg;
+            ncnn::Mat ncnnImg24;
+            ncnn::Mat score;
+            ncnn::Mat bbox;
+
+            copy_cut_border(ncnnImg, tempImg, (*it).y1, m_ImgHeight - (*it).y2, (*it).x1, m_ImgWidth - (*it).x2);
+            resize_bilinear(tempImg, ncnnImg24, 24, 24);
             ncnn::Extractor ex = m_Rnet.create_extractor();
             ex.set_light_mode(true);
-            ex.input("data", in);
-            ncnn::Mat score, bbox;
+            // [TODO] - Check if need to set_num_threads
+            ex.input("data", ncnnImg24);
             ex.extract("prob1", score);
             ex.extract("conv5-2", bbox);
+
             if (*(score.data + score.cstep)>m_threshold[1])
             {
                 for (int channel = 0; channel<4; channel++)
                     it->regreCoord[channel] = bbox.channel(channel)[0];//*(bbox.data+channel*bbox.cstep);
+
                 it->area = (it->x2 - it->x1)*(it->y2 - it->y1);
                 it->score = score.channel(1)[0];//*(score.data+score.cstep);
-                m_secondBbox_.push_back(*it);
+                secondBbox.push_back(*it);
                 order.score = it->score;
-                order.oriOrder = count++;
-                m_secondBboxScore_.push_back(order);
+                order.oriOrder = secondBboxScore.size();
+                secondBboxScore.push_back(order);
             }
             else
             {
@@ -280,53 +313,58 @@ void CMtcnn::Detect(ncnn::Mat& img_, std::vector<SBoundingBox>& finalBbox_)
             }
         }
     }
-    //printf("secondBbox_.size()=%d\n", secondBbox_.size());
-    if (count<1)return;
-    Nms(m_secondBbox_, m_secondBboxScore_, m_nmsThreshold[1]);
-    RefineAndSquareBbox(m_secondBbox_, m_ImgHeight, m_ImgWidth);
 
-    //third stage 
-    count = 0;
-    for (vector<SBoundingBox>::iterator it = m_secondBbox_.begin(); it != m_secondBbox_.end(); it++)
+    if (secondBboxScore.empty())
+        return;
+
+    Nms(secondBbox, secondBboxScore, m_nmsThreshold[1]);
+    RefineAndSquareBbox(secondBbox, m_ImgHeight, m_ImgWidth);
+
+    //third stage
+    for (vector<SBoundingBox>::iterator it = secondBbox.begin(); it != secondBbox.end(); it++)
     {
         if ((*it).bExist)
         {
-            ncnn::Mat tempIm;
-            copy_cut_border(m_img, tempIm, (*it).y1, m_ImgHeight - (*it).y2, (*it).x1, m_ImgWidth - (*it).x2);
-            ncnn::Mat in;
-            resize_bilinear(tempIm, in, 48, 48);
+            ncnn::Mat tempImg;
+            ncnn::Mat ncnnImg48;
+            ncnn::Mat score;
+            ncnn::Mat bbox;
+            ncnn::Mat keyPoint;
+
+            copy_cut_border(ncnnImg, tempImg, (*it).y1, m_ImgHeight - (*it).y2, (*it).x1, m_ImgWidth - (*it).x2);
+            resize_bilinear(tempImg, ncnnImg48, 48, 48);
             ncnn::Extractor ex = m_Onet.create_extractor();
             ex.set_light_mode(true);
-            ex.input("data", in);
-            ncnn::Mat score, bbox, keyPoint;
+            ex.input("data", ncnnImg48);
             ex.extract("prob1", score);
             ex.extract("conv6-2", bbox);
             ex.extract("conv6-3", keyPoint);
-            if (score.channel(1)[0]>m_threshold[2])
+            if (score.channel(1)[0] > m_threshold[2])
             {
-                for (int channel = 0; channel<4; channel++)
+                for (int channel = 0; channel < 4; channel++)
                     it->regreCoord[channel] = bbox.channel(channel)[0];
                 it->area = (it->x2 - it->x1)*(it->y2 - it->y1);
                 it->score = score.channel(1)[0];
-                for (int num = 0; num<5; num++)
+                for (int num = 0; num < 5; num++)
                 {
                     (it->ppoint)[num] = it->x1 + (it->x2 - it->x1)*keyPoint.channel(num)[0];
                     (it->ppoint)[num + 5] = it->y1 + (it->y2 - it->y1)*keyPoint.channel(num + 5)[0];
                 }
 
-                m_thirdBbox_.push_back(*it);
+                thirdBbox.push_back(*it);
                 order.score = it->score;
-                order.oriOrder = count++;
-                m_thirdBboxScore_.push_back(order);
+                order.oriOrder = thirdBboxScore.size();
+                thirdBboxScore.push_back(order);
             }
             else
                 (*it).bExist = false;
         }
     }
 
-    //printf("thirdBbox_.size()=%d\n", thirdBbox_.size());
-    if (count<1)return;
-    RefineAndSquareBbox(m_thirdBbox_, m_ImgHeight, m_ImgWidth);
-    Nms(m_thirdBbox_, m_thirdBboxScore_, m_nmsThreshold[2], "Min");
-    finalBbox_ = m_thirdBbox_;
+    if (thirdBboxScore.empty())
+        return;
+
+    RefineAndSquareBbox(thirdBbox, m_ImgHeight, m_ImgWidth);
+    Nms(thirdBbox, thirdBboxScore, m_nmsThreshold[2], "Min");
+    result = thirdBbox;
 }
