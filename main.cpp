@@ -46,7 +46,7 @@ int main(int argc, char** argv)
 
         if (!bSetParamToMtcnn && frame.cols > 0)
         {
-            mtcnn.SetParam(frame.cols, frame.rows, eBGR, 90, 0.709);
+            mtcnn.SetParam(frame.cols, frame.rows, eBGR888, 90, 0.709);
             bSetParamToMtcnn = true;
         }
 

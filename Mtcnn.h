@@ -33,7 +33,8 @@ struct SOrderScore
 
 enum imageType
 {
-    eBGR888    /**< The image is stored using a 24-bit BGR format (8-8-8). */  
+    eBGR888,    /**< The image is stored using a 24-bit BGR format (8-8-8). */
+    eRGB888     /**< The image is stored using a 24-bit RGB format (8-8-8). */
 };
 
 class CMtcnn
