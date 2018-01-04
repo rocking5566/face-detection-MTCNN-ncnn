@@ -82,6 +82,27 @@ std::vector<float> CMtcnn::GetPyramidScale(unsigned int width, unsigned int heig
     return std::move(retScale);
 }
 
+void CMtcnn::ConvertToSMtcnnFace(const std::vector<SBoundingBox>& src, vector<SMtcnnFace>& dst)
+{
+    SMtcnnFace tmpFace;
+    for (auto it = src.begin(); it != src.end(); it++)
+    {
+        if (it->bExist)
+        {
+            tmpFace.score = it->score;
+            tmpFace.boundingBox[0] = it->x1;
+            tmpFace.boundingBox[1] = it->y1;
+            tmpFace.boundingBox[2] = it->x2;
+            tmpFace.boundingBox[3] = it->y2;
+
+            for (int i = 0; i < 10; ++i)
+                tmpFace.landmark[i] = (int)(it->ppoint[i]);
+
+            dst.push_back(tmpFace);
+        }
+    }
+}
+
 std::vector<SBoundingBox> CMtcnn::PNetWithPyramid(const ncnn::Mat& img, const std::vector<float> pyramidScale)
 {
     std::vector<SBoundingBox> firstBbox;
@@ -213,8 +234,8 @@ std::vector<SBoundingBox> CMtcnn::ONet(const ncnn::Mat& img, const std::vector<S
                 metadata.score = score.channel(1)[0];
                 for (int num = 0; num < 5; num++)
                 {
-                    (metadata.ppoint)[num] = metadata.x1 + (metadata.x2 - metadata.x1)*keyPoint.channel(num)[0];
-                    (metadata.ppoint)[num + 5] = metadata.y1 + (metadata.y2 - metadata.y1)*keyPoint.channel(num + 5)[0];
+                    (metadata.ppoint)[num] = metadata.x1 + (metadata.x2 - metadata.x1) * keyPoint.channel(num)[0];
+                    (metadata.ppoint)[num + 5] = metadata.y1 + (metadata.y2 - metadata.y1) * keyPoint.channel(num + 5)[0];
                 }
 
                 thirdBbox.push_back(metadata);
@@ -375,9 +396,8 @@ void CMtcnn::RefineAndSquareBbox(vector<SBoundingBox> &vecBbox, const int &heigh
     }
 }
 
-void CMtcnn::Detect(const unsigned char* img, std::vector<SBoundingBox>& result)
+void CMtcnn::Detect(const unsigned char* img, std::vector<SMtcnnFace>& result)
 {
-
     ncnn::Mat ncnnImg = ncnn::Mat::from_pixels(img, GetNcnnImageConvertType(eBGR), m_ImgWidth, m_ImgHeight);
     ncnnImg.substract_mean_normalize(m_mean_vals, m_norm_vals);
 
@@ -385,5 +405,6 @@ void CMtcnn::Detect(const unsigned char* img, std::vector<SBoundingBox>& result)
     std::vector<SBoundingBox> secondBbox = RNet(ncnnImg, firstBbox);
     std::vector<SBoundingBox> thirdBbox = ONet(ncnnImg, secondBbox);
 
-    result = std::move(thirdBbox);
+    ConvertToSMtcnnFace(thirdBbox, result);
 }
+

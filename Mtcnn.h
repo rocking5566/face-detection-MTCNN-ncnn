@@ -3,8 +3,14 @@
 
 #include <algorithm>
 #include <vector>
-
 #include "net.h"
+
+struct SMtcnnFace
+{
+    float score;
+    int boundingBox[4];    // x1, y1, x2, y2
+    int landmark[10];    // x1, x2, x3, x4, x5, y1, y2, y3, y4, y5
+};
 
 struct SBoundingBox
 {
@@ -15,7 +21,7 @@ struct SBoundingBox
     int y2;
     float area;
     bool bExist;
-    float ppoint[10];
+    float ppoint[10];    // x1, x2, x3, x4, x5, y1, y2, y3, y4, y5
     float regreCoord[4];
 };
 
@@ -40,12 +46,13 @@ public:
 
     // Can be called in any time
     void SetParam(unsigned int width, unsigned int height, imageType type = eBGR, int iMinSize = 90, float fPyramidFactor = 0.709);
-    void Detect(const unsigned char* img, std::vector<SBoundingBox>& result);
+    void Detect(const unsigned char* img, std::vector<SMtcnnFace>& result);
 
 private:
     void GenerateBbox(ncnn::Mat score, ncnn::Mat location, std::vector<SBoundingBox>& boundingBox_, std::vector<SOrderScore>& bboxScore_, float scale);
     void Nms(std::vector<SBoundingBox> &boundingBox_, std::vector<SOrderScore> &bboxScore_, const float overlap_threshold, std::string modelname = "Union");
     void RefineAndSquareBbox(std::vector<SBoundingBox> &vecBbox, const int &height, const int &width);
+    void ConvertToSMtcnnFace(const std::vector<SBoundingBox>& src, std::vector<SMtcnnFace>& dst);
 
     std::vector<float> GetPyramidScale(unsigned int width, unsigned int height, int iMinSize, float fPyramidFactor);
     std::vector<SBoundingBox> PNetWithPyramid(const ncnn::Mat& img, const std::vector<float> pyramidScale);
