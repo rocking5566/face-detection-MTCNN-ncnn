@@ -6,7 +6,6 @@
 using namespace std;
 
 const float nmsOverlapThreshold[3] = { 0.5f, 0.7f, 0.7f };
-const float faceScoreThreshold[3] = { 0.6f, 0.6f, 0.6f };
 const float normalizeImageMean[3] = { 127.5, 127.5, 127.5 };
 const float normalizeImageScale[3] = { 0.0078125, 0.0078125, 0.0078125 };
 
@@ -48,9 +47,17 @@ void CMtcnn::LoadModel(const char* pNetStructPath, const char* pNetWeightPath, c
     m_Onet.load_model(oNetWeightPath);
 }
 
-void CMtcnn::SetParam(const SImageFormat& imgFormat, int iMinFaceSize /*= 90*/, float fPyramidFactor /*= 0.709*/)
+void CMtcnn::SetParam(const SImageFormat& imgFormat, int iMinFaceSize /*= 90*/, float fPyramidFactor /*= 0.709*/, const float* faceScoreThreshold /*= NULL*/)
 {
     m_ImgFormat = imgFormat;
+    if (faceScoreThreshold)
+    {
+        for (int i = 0; i < 3; ++i)
+        {
+            m_FaceScoreThreshold[i] = faceScoreThreshold[i];
+        }
+    }
+
     m_pyramidScale = GetPyramidScale(imgFormat.width, imgFormat.height, iMinFaceSize, fPyramidFactor);
 }
 
@@ -169,7 +176,7 @@ std::vector<SFaceProposal> CMtcnn::RNet(const ncnn::Mat& img, const std::vector<
             ex.extract("prob1", score);
             ex.extract("conv5-2", bbox);
 
-            if (*(score.data + score.cstep)>faceScoreThreshold[1])
+            if (*(score.data + score.cstep)>m_FaceScoreThreshold[1])
             {
                 SFaceProposal metadata = *it;
 
@@ -219,7 +226,7 @@ std::vector<SFaceProposal> CMtcnn::ONet(const ncnn::Mat& img, const std::vector<
             ex.extract("prob1", score);
             ex.extract("conv6-2", bbox);
             ex.extract("conv6-3", keyPoint);
-            if (score.channel(1)[0] > faceScoreThreshold[2])
+            if (score.channel(1)[0] > m_FaceScoreThreshold[2])
             {
                 SFaceProposal metadata = *it;
 
@@ -264,7 +271,7 @@ void CMtcnn::ResizeFaceFromScale(ncnn::Mat nnFaceScore, ncnn::Mat nnFaceBounding
     {
         for (int col = 0; col<nnFaceScore.w; col++)
         {
-            if (*p > faceScoreThreshold[0])
+            if (*p > m_FaceScoreThreshold[0])
             {
                 faceRegion.score = *p;
                 order.score = *p;

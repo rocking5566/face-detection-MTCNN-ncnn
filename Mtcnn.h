@@ -74,9 +74,11 @@ public:
     *   @param imgFormat input image format(resolution, type...etc) for the Detect().
     *   @param iMinFaceSize Smallest size of face we want to detect. Larger the iMinFaceSize, faster the algorithm.
     *   @param fPyramidFactor scale decay rate between pyramid layer.
+    *   @param faceScoreThreshold Threshold of the face classification in RNet, PNet and ONet. Pointer size should be 3, If pointer is NULL, default value will be applied.
     */
     void SetParam(const SImageFormat& imgFormat,
-                  int iMinFaceSize = 90, float fPyramidFactor = 0.709);
+                  int iMinFaceSize = 90, float fPyramidFactor = 0.709,
+                  const float* faceScoreThreshold = NULL);
 
     /**
     *   Detect face in the image
@@ -110,5 +112,6 @@ private:
 
     std::vector<float> m_pyramidScale;
     SImageFormat m_ImgFormat;
+    float m_FaceScoreThreshold[3] = { 0.6f, 0.6f, 0.6f };
 };
 #endif // Mtcnn_h__

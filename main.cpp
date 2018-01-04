@@ -47,7 +47,8 @@ int main(int argc, char** argv)
         if (!bSetParamToMtcnn && frame.cols > 0)
         {
             SImageFormat format(frame.cols, frame.rows, eBGR888);
-            mtcnn.SetParam(format, 90, 0.709);
+            const float faceScoreThreshold[3] = { 0.6f, 0.6f, 0.6f };
+            mtcnn.SetParam(format, 90, 0.709, faceScoreThreshold);
             bSetParamToMtcnn = true;
         }
 
