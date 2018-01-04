@@ -12,6 +12,26 @@ struct SMtcnnFace
     int landmark[10];    // x1, x2, x3, x4, x5, y1, y2, y3, y4, y5
 };
 
+enum imageType
+{
+    eBGR888,    /**< The image is stored using a 24-bit BGR format (8-8-8). */
+    eRGB888     /**< The image is stored using a 24-bit RGB format (8-8-8). */
+};
+
+struct SImageFormat
+{
+    SImageFormat(unsigned int width_, unsigned int height_, imageType type_)
+        : width(width_)
+        , height(height_)
+        , type(type_)
+    {
+    }
+
+    unsigned int width;
+    unsigned int height;
+    imageType type;
+};
+
 struct SFaceProposal
 {
     float score;
@@ -29,12 +49,6 @@ struct SOrderScore
 {
     float score;
     int oriOrder;
-};
-
-enum imageType
-{
-    eBGR888,    /**< The image is stored using a 24-bit BGR format (8-8-8). */
-    eRGB888     /**< The image is stored using a 24-bit RGB format (8-8-8). */
 };
 
 class CMtcnn
@@ -57,13 +71,11 @@ public:
 
     /**
     *   Set Parameter of the MTCNN
-    *   @param width input image width for the Detect().
-    *   @param height input image height for the Detect().
-    *   @param type input image format for the Detect().
+    *   @param imgFormat input image format(resolution, type...etc) for the Detect().
     *   @param iMinFaceSize Smallest size of face we want to detect. Larger the iMinFaceSize, faster the algorithm.
     *   @param fPyramidFactor scale decay rate between pyramid layer.
     */
-    void SetParam(unsigned int width, unsigned int height, imageType type = eBGR888, 
+    void SetParam(const SImageFormat& imgFormat,
                   int iMinFaceSize = 90, float fPyramidFactor = 0.709);
 
     /**
@@ -96,9 +108,7 @@ private:
     ncnn::Net m_Rnet;
     ncnn::Net m_Onet;
 
-    int m_ImgWidth;
-    int m_ImgHeight;
-    imageType m_ImgType;
     std::vector<float> m_pyramidScale;
+    SImageFormat m_ImgFormat;
 };
 #endif // Mtcnn_h__

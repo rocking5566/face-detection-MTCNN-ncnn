@@ -30,9 +30,7 @@ int GetNcnnImageConvertType(imageType type)
 }
 
 CMtcnn::CMtcnn()
-    : m_ImgType(eBGR888)
-    , m_ImgWidth(0)
-    , m_ImgHeight(0)
+    : m_ImgFormat(0, 0, eBGR888)
 {
     // [TODO] - Refine naming and refactor code
     // Re-implement from the following link
@@ -50,13 +48,10 @@ void CMtcnn::LoadModel(const char* pNetStructPath, const char* pNetWeightPath, c
     m_Onet.load_model(oNetWeightPath);
 }
 
-void CMtcnn::SetParam(unsigned int width, unsigned int height, imageType type /*= eBGR888*/, int iMinFaceSize /*= 90*/, float fPyramidFactor /*= 0.709*/)
+void CMtcnn::SetParam(const SImageFormat& imgFormat, int iMinFaceSize /*= 90*/, float fPyramidFactor /*= 0.709*/)
 {
-    m_ImgWidth = width;
-    m_ImgHeight = height;
-    m_ImgType = type;
-
-    m_pyramidScale = GetPyramidScale(width, height, iMinFaceSize, fPyramidFactor);
+    m_ImgFormat = imgFormat;
+    m_pyramidScale = GetPyramidScale(imgFormat.width, imgFormat.height, iMinFaceSize, fPyramidFactor);
 }
 
 std::vector<float> CMtcnn::GetPyramidScale(unsigned int width, unsigned int height, int iMinFaceSize, float fPyramidFactor)
@@ -116,8 +111,8 @@ std::vector<SFaceProposal> CMtcnn::PNetWithPyramid(const ncnn::Mat& img, const s
         std::vector<SFaceProposal> faceRegions;
         std::vector<SOrderScore> faceScore;
 
-        int hs = (int)ceil(m_ImgHeight * m_pyramidScale[i]);
-        int ws = (int)ceil(m_ImgWidth * m_pyramidScale[i]);
+        int hs = (int)ceil(m_ImgFormat.height * m_pyramidScale[i]);
+        int ws = (int)ceil(m_ImgFormat.width * m_pyramidScale[i]);
         ncnn::Mat pyramidImg;
         resize_bilinear(img, pyramidImg, ws, hs);
         ncnn::Extractor ex = m_Pnet.create_extractor();
@@ -144,7 +139,7 @@ std::vector<SFaceProposal> CMtcnn::PNetWithPyramid(const ncnn::Mat& img, const s
     if (!firstOrderScore.empty())
     {
         Nms(firstBbox, firstOrderScore, m_nmsThreshold[0]);
-        RefineAndSquareBbox(firstBbox, m_ImgHeight, m_ImgWidth);
+        RefineAndSquareBbox(firstBbox, m_ImgFormat.height, m_ImgFormat.width);
     }
 
     return std::move(firstBbox);
@@ -165,7 +160,7 @@ std::vector<SFaceProposal> CMtcnn::RNet(const ncnn::Mat& img, const std::vector<
             ncnn::Mat score;
             ncnn::Mat bbox;
 
-            copy_cut_border(img, tempImg, (*it).y1, m_ImgHeight - (*it).y2, (*it).x1, m_ImgWidth - (*it).x2);
+            copy_cut_border(img, tempImg, (*it).y1, m_ImgFormat.height - (*it).y2, (*it).x1, m_ImgFormat.width - (*it).x2);
             resize_bilinear(tempImg, ncnnImg24, 24, 24);
             ncnn::Extractor ex = m_Rnet.create_extractor();
             ex.set_light_mode(true);
@@ -194,7 +189,7 @@ std::vector<SFaceProposal> CMtcnn::RNet(const ncnn::Mat& img, const std::vector<
     if (!secondBboxScore.empty())
     {
         Nms(secondBbox, secondBboxScore, m_nmsThreshold[1]);
-        RefineAndSquareBbox(secondBbox, m_ImgHeight, m_ImgWidth);
+        RefineAndSquareBbox(secondBbox, m_ImgFormat.height, m_ImgFormat.width);
     }
 
     return std::move(secondBbox);
@@ -216,7 +211,7 @@ std::vector<SFaceProposal> CMtcnn::ONet(const ncnn::Mat& img, const std::vector<
             ncnn::Mat bbox;
             ncnn::Mat keyPoint;
 
-            copy_cut_border(img, tempImg, (*it).y1, m_ImgHeight - (*it).y2, (*it).x1, m_ImgWidth - (*it).x2);
+            copy_cut_border(img, tempImg, (*it).y1, m_ImgFormat.height - (*it).y2, (*it).x1, m_ImgFormat.width - (*it).x2);
             resize_bilinear(tempImg, ncnnImg48, 48, 48);
             ncnn::Extractor ex = m_Onet.create_extractor();
             ex.set_light_mode(true);
@@ -248,7 +243,7 @@ std::vector<SFaceProposal> CMtcnn::ONet(const ncnn::Mat& img, const std::vector<
 
     if (!thirdBboxScore.empty())
     {
-        RefineAndSquareBbox(thirdBbox, m_ImgHeight, m_ImgWidth);
+        RefineAndSquareBbox(thirdBbox, m_ImgFormat.height, m_ImgFormat.width);
         Nms(thirdBbox, thirdBboxScore, m_nmsThreshold[2], "Min");
     }
 
@@ -400,7 +395,7 @@ void CMtcnn::RefineAndSquareBbox(vector<SFaceProposal> &vecBbox, const int &heig
 
 void CMtcnn::Detect(const unsigned char* src, std::vector<SMtcnnFace>& result)
 {
-    ncnn::Mat ncnnImg = ncnn::Mat::from_pixels(src, GetNcnnImageConvertType(m_ImgType), m_ImgWidth, m_ImgHeight);
+    ncnn::Mat ncnnImg = ncnn::Mat::from_pixels(src, GetNcnnImageConvertType(m_ImgFormat.type), m_ImgFormat.width, m_ImgFormat.height);
     ncnnImg.substract_mean_normalize(m_mean_vals, m_norm_vals);
 
     std::vector<SFaceProposal> firstBbox = PNetWithPyramid(ncnnImg, m_pyramidScale);

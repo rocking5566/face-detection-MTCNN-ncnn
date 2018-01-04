@@ -46,7 +46,8 @@ int main(int argc, char** argv)
 
         if (!bSetParamToMtcnn && frame.cols > 0)
         {
-            mtcnn.SetParam(frame.cols, frame.rows, eBGR888, 90, 0.709);
+            SImageFormat format(frame.cols, frame.rows, eBGR888);
+            mtcnn.SetParam(format, 90, 0.709);
             bSetParamToMtcnn = true;
         }
 
