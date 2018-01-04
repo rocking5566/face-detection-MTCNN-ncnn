@@ -12,8 +12,11 @@ void PlotDetectionResult(const Mat& frame, const std::vector<SMtcnnFace>& bbox)
 {
     for (auto it = bbox.begin(); it != bbox.end(); it++)
     {
+        // Plot bounding box
         rectangle(frame, Point(it->boundingBox[0], it->boundingBox[1]), 
             Point(it->boundingBox[2], it->boundingBox[3]), Scalar(0, 0, 255), 2, 8, 0);
+
+        // Plot facial landmark
         for (int num = 0; num < 5; num++)
         {
             circle(frame, Point(it->landmark[num], it->landmark[num + 5]), 3, Scalar(0, 255, 255), -1);
