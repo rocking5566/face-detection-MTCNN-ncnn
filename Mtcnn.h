@@ -12,7 +12,7 @@ struct SMtcnnFace
     int landmark[10];    // x1, x2, x3, x4, x5, y1, y2, y3, y4, y5
 };
 
-struct SBoundingBox
+struct SFaceProposal
 {
     float score;
     int x1;
@@ -49,15 +49,15 @@ public:
     void Detect(const unsigned char* img, std::vector<SMtcnnFace>& result);
 
 private:
-    void GenerateBbox(ncnn::Mat score, ncnn::Mat location, std::vector<SBoundingBox>& boundingBox_, std::vector<SOrderScore>& bboxScore_, float scale);
-    void Nms(std::vector<SBoundingBox> &boundingBox_, std::vector<SOrderScore> &bboxScore_, const float overlap_threshold, std::string modelname = "Union");
-    void RefineAndSquareBbox(std::vector<SBoundingBox> &vecBbox, const int &height, const int &width);
-    void ConvertToSMtcnnFace(const std::vector<SBoundingBox>& src, std::vector<SMtcnnFace>& dst);
+    void ResizeFaceFromScale(ncnn::Mat score, ncnn::Mat location, std::vector<SFaceProposal>& boundingBox_, std::vector<SOrderScore>& bboxScore_, float scale);
+    void Nms(std::vector<SFaceProposal> &boundingBox_, std::vector<SOrderScore> &bboxScore_, const float overlap_threshold, std::string modelname = "Union");
+    void RefineAndSquareBbox(std::vector<SFaceProposal> &vecBbox, const int &height, const int &width);
+    void ConvertToSMtcnnFace(const std::vector<SFaceProposal>& src, std::vector<SMtcnnFace>& dst);
 
     std::vector<float> GetPyramidScale(unsigned int width, unsigned int height, int iMinSize, float fPyramidFactor);
-    std::vector<SBoundingBox> PNetWithPyramid(const ncnn::Mat& img, const std::vector<float> pyramidScale);
-    std::vector<SBoundingBox> RNet(const ncnn::Mat& img, const std::vector<SBoundingBox> PNetResult);
-    std::vector<SBoundingBox> ONet(const ncnn::Mat& img, const std::vector<SBoundingBox> RNetResult);
+    std::vector<SFaceProposal> PNetWithPyramid(const ncnn::Mat& img, const std::vector<float> pyramidScale);
+    std::vector<SFaceProposal> RNet(const ncnn::Mat& img, const std::vector<SFaceProposal> PNetResult);
+    std::vector<SFaceProposal> ONet(const ncnn::Mat& img, const std::vector<SFaceProposal> RNetResult);
 
 
 private:

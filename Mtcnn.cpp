@@ -82,7 +82,7 @@ std::vector<float> CMtcnn::GetPyramidScale(unsigned int width, unsigned int heig
     return std::move(retScale);
 }
 
-void CMtcnn::ConvertToSMtcnnFace(const std::vector<SBoundingBox>& src, vector<SMtcnnFace>& dst)
+void CMtcnn::ConvertToSMtcnnFace(const std::vector<SFaceProposal>& src, vector<SMtcnnFace>& dst)
 {
     SMtcnnFace tmpFace;
     for (auto it = src.begin(); it != src.end(); it++)
@@ -103,18 +103,18 @@ void CMtcnn::ConvertToSMtcnnFace(const std::vector<SBoundingBox>& src, vector<SM
     }
 }
 
-std::vector<SBoundingBox> CMtcnn::PNetWithPyramid(const ncnn::Mat& img, const std::vector<float> pyramidScale)
+std::vector<SFaceProposal> CMtcnn::PNetWithPyramid(const ncnn::Mat& img, const std::vector<float> pyramidScale)
 {
-    std::vector<SBoundingBox> firstBbox;
+    std::vector<SFaceProposal> firstBbox;
     std::vector<SOrderScore> firstOrderScore;
     SOrderScore order;
 
     for (size_t i = 0; i < m_pyramidScale.size(); ++i)
     {
-        ncnn::Mat score;
-        ncnn::Mat location;
-        std::vector<SBoundingBox> boundingBox;
-        std::vector<SOrderScore> bboxScore;
+        ncnn::Mat nnFaceScore;
+        ncnn::Mat nnFaceBoundingBox;
+        std::vector<SFaceProposal> faceRegions;
+        std::vector<SOrderScore> faceScore;
 
         int hs = (int)ceil(m_ImgHeight * m_pyramidScale[i]);
         int ws = (int)ceil(m_ImgWidth * m_pyramidScale[i]);
@@ -124,12 +124,12 @@ std::vector<SBoundingBox> CMtcnn::PNetWithPyramid(const ncnn::Mat& img, const st
         ex.set_light_mode(true);
         // [TODO] - Check if need to set_num_threads
         ex.input("data", pyramidImg);
-        ex.extract("prob1", score);
-        ex.extract("conv4-2", location);
-        GenerateBbox(score, location, boundingBox, bboxScore, m_pyramidScale[i]);
-        Nms(boundingBox, bboxScore, m_nmsThreshold[0]);
+        ex.extract("prob1", nnFaceScore);
+        ex.extract("conv4-2", nnFaceBoundingBox);
+        ResizeFaceFromScale(nnFaceScore, nnFaceBoundingBox, faceRegions, faceScore, m_pyramidScale[i]);
+        Nms(faceRegions, faceScore, m_nmsThreshold[0]);
 
-        for (vector<SBoundingBox>::iterator it = boundingBox.begin(); it != boundingBox.end(); it++)
+        for (vector<SFaceProposal>::iterator it = faceRegions.begin(); it != faceRegions.end(); it++)
         {
             if ((*it).bExist)
             {
@@ -150,13 +150,13 @@ std::vector<SBoundingBox> CMtcnn::PNetWithPyramid(const ncnn::Mat& img, const st
     return std::move(firstBbox);
 }
 
-std::vector<SBoundingBox> CMtcnn::RNet(const ncnn::Mat& img, const std::vector<SBoundingBox> PNetResult)
+std::vector<SFaceProposal> CMtcnn::RNet(const ncnn::Mat& img, const std::vector<SFaceProposal> PNetResult)
 {
-    std::vector<SBoundingBox> secondBbox;
+    std::vector<SFaceProposal> secondBbox;
     std::vector<SOrderScore> secondBboxScore;
     SOrderScore order;
 
-    for (vector<SBoundingBox>::const_iterator it = PNetResult.begin(); it != PNetResult.end(); it++)
+    for (vector<SFaceProposal>::const_iterator it = PNetResult.begin(); it != PNetResult.end(); it++)
     {
         if ((*it).bExist)
         {
@@ -176,7 +176,7 @@ std::vector<SBoundingBox> CMtcnn::RNet(const ncnn::Mat& img, const std::vector<S
 
             if (*(score.data + score.cstep)>m_threshold[1])
             {
-                SBoundingBox metadata = *it;
+                SFaceProposal metadata = *it;
 
                 for (int boxAxis = 0; boxAxis < 4; boxAxis++)
                     metadata.regreCoord[boxAxis] = bbox.channel(boxAxis)[0];    //*(bbox.data+channel*bbox.cstep);
@@ -200,13 +200,13 @@ std::vector<SBoundingBox> CMtcnn::RNet(const ncnn::Mat& img, const std::vector<S
     return std::move(secondBbox);
 }
 
-std::vector<SBoundingBox> CMtcnn::ONet(const ncnn::Mat& img, const std::vector<SBoundingBox> RNetResult)
+std::vector<SFaceProposal> CMtcnn::ONet(const ncnn::Mat& img, const std::vector<SFaceProposal> RNetResult)
 {
-    std::vector<SBoundingBox> thirdBbox;
+    std::vector<SFaceProposal> thirdBbox;
     std::vector<SOrderScore> thirdBboxScore;
     SOrderScore order;
 
-    for (vector<SBoundingBox>::const_iterator it = RNetResult.begin(); it != RNetResult.end(); it++)
+    for (vector<SFaceProposal>::const_iterator it = RNetResult.begin(); it != RNetResult.end(); it++)
     {
         if ((*it).bExist)
         {
@@ -226,7 +226,7 @@ std::vector<SBoundingBox> CMtcnn::ONet(const ncnn::Mat& img, const std::vector<S
             ex.extract("conv6-3", keyPoint);
             if (score.channel(1)[0] > m_threshold[2])
             {
-                SBoundingBox metadata = *it;
+                SFaceProposal metadata = *it;
 
                 for (int channel = 0; channel < 4; channel++)
                     metadata.regreCoord[channel] = bbox.channel(channel)[0];
@@ -255,42 +255,43 @@ std::vector<SBoundingBox> CMtcnn::ONet(const ncnn::Mat& img, const std::vector<S
     return std::move(thirdBbox);
 }
 
-void CMtcnn::GenerateBbox(ncnn::Mat score, ncnn::Mat location, std::vector<SBoundingBox>& boundingBox_, std::vector<SOrderScore>& bboxScore_, float scale)
+void CMtcnn::ResizeFaceFromScale(ncnn::Mat nnFaceScore, ncnn::Mat nnFaceBoundingBox, std::vector<SFaceProposal>& faceRegions, std::vector<SOrderScore>& faceScores, float scale)
 {
     int stride = 2;
     int cellsize = 12;
     int count = 0;
     //score p
-    float *p = score.channel(1);//score.data + score.cstep;
-    float *plocal = location.data;
-    SBoundingBox bbox;
+    float *p = nnFaceScore.channel(1);//score.data + score.cstep;
+    float *plocal = nnFaceBoundingBox.data;
+    SFaceProposal faceRegion;
     SOrderScore order;
-    for (int row = 0; row<score.h; row++)
+    for (int row = 0; row<nnFaceScore.h; row++)
     {
-        for (int col = 0; col<score.w; col++)
+        for (int col = 0; col<nnFaceScore.w; col++)
         {
-            if (*p>m_threshold[0])
+            if (*p > m_threshold[0])
             {
-                bbox.score = *p;
+                faceRegion.score = *p;
                 order.score = *p;
                 order.oriOrder = count++;
-                bbox.x1 = round((stride*col + 1) / scale);
-                bbox.y1 = round((stride*row + 1) / scale);
-                bbox.x2 = round((stride*col + 1 + cellsize) / scale);
-                bbox.y2 = round((stride*row + 1 + cellsize) / scale);
-                bbox.bExist = true;
-                bbox.area = (bbox.x2 - bbox.x1)*(bbox.y2 - bbox.y1);
-                for (int channel = 0; channel<4; channel++)
-                    bbox.regreCoord[channel] = location.channel(channel)[0];
-                boundingBox_.push_back(bbox);
-                bboxScore_.push_back(order);
+                faceRegion.x1 = round((stride*col + 1) / scale);
+                faceRegion.y1 = round((stride*row + 1) / scale);
+                faceRegion.x2 = round((stride*col + 1 + cellsize) / scale);
+                faceRegion.y2 = round((stride*row + 1 + cellsize) / scale);
+                faceRegion.bExist = true;
+                faceRegion.area = (faceRegion.x2 - faceRegion.x1)*(faceRegion.y2 - faceRegion.y1);
+                for (int channel = 0; channel < 4; channel++)
+                    faceRegion.regreCoord[channel] = nnFaceBoundingBox.channel(channel)[0];
+                faceRegions.push_back(faceRegion);
+                faceScores.push_back(order);
             }
             ++p;
             ++plocal;
         }
     }
 }
-void CMtcnn::Nms(std::vector<SBoundingBox> &boundingBox_, std::vector<SOrderScore> &bboxScore_, const float overlap_threshold, string modelname)
+
+void CMtcnn::Nms(std::vector<SFaceProposal> &boundingBox_, std::vector<SOrderScore> &bboxScore_, const float overlap_threshold, string modelname)
 {
     if (boundingBox_.empty())
     {
@@ -353,7 +354,8 @@ void CMtcnn::Nms(std::vector<SBoundingBox> &boundingBox_, std::vector<SOrderScor
     for (int i = 0; i<heros.size(); i++)
         boundingBox_.at(heros.at(i)).bExist = true;
 }
-void CMtcnn::RefineAndSquareBbox(vector<SBoundingBox> &vecBbox, const int &height, const int &width)
+
+void CMtcnn::RefineAndSquareBbox(vector<SFaceProposal> &vecBbox, const int &height, const int &width)
 {
     if (vecBbox.empty())
     {
@@ -363,7 +365,7 @@ void CMtcnn::RefineAndSquareBbox(vector<SBoundingBox> &vecBbox, const int &heigh
     float bbw = 0, bbh = 0, maxSide = 0;
     float h = 0, w = 0;
     float x1 = 0, y1 = 0, x2 = 0, y2 = 0;
-    for (vector<SBoundingBox>::iterator it = vecBbox.begin(); it != vecBbox.end(); it++)
+    for (vector<SFaceProposal>::iterator it = vecBbox.begin(); it != vecBbox.end(); it++)
     {
         if ((*it).bExist)
         {
@@ -401,9 +403,9 @@ void CMtcnn::Detect(const unsigned char* img, std::vector<SMtcnnFace>& result)
     ncnn::Mat ncnnImg = ncnn::Mat::from_pixels(img, GetNcnnImageConvertType(eBGR), m_ImgWidth, m_ImgHeight);
     ncnnImg.substract_mean_normalize(m_mean_vals, m_norm_vals);
 
-    std::vector<SBoundingBox> firstBbox = PNetWithPyramid(ncnnImg, m_pyramidScale);
-    std::vector<SBoundingBox> secondBbox = RNet(ncnnImg, firstBbox);
-    std::vector<SBoundingBox> thirdBbox = ONet(ncnnImg, secondBbox);
+    std::vector<SFaceProposal> firstBbox = PNetWithPyramid(ncnnImg, m_pyramidScale);
+    std::vector<SFaceProposal> secondBbox = RNet(ncnnImg, firstBbox);
+    std::vector<SFaceProposal> thirdBbox = ONet(ncnnImg, secondBbox);
 
     ConvertToSMtcnnFace(thirdBbox, result);
 }
