@@ -40,25 +40,55 @@ class CMtcnn
 {
 public:
     CMtcnn();
+
+    /**
+    *   Set model path of the MTCNN
+    *   @param pNetStructPath Path of the PNet struct.
+    *   @param pNetWeightPath Path of the PNet weight.
+    *   @param rNetStructPath Path of the RNet struct.
+    *   @param rNetWeightPath Path of the RNet weight.
+    *   @param oNetStructPath Path of the ONet struct.
+    *   @param oNetWeightPath Path of the ONet weight.
+    */
     void LoadModel(const char* pNetStructPath, const char* pNetWeightPath
                  , const char* rNetStructPath, const char* rNetWeightPath
                  , const char* oNetStructPath, const char* oNetWeightPath);
 
-    // Can be called in any time
-    void SetParam(unsigned int width, unsigned int height, imageType type = eBGR, int iMinFaceSize = 90, float fPyramidFactor = 0.709);
-    void Detect(const unsigned char* img, std::vector<SMtcnnFace>& result);
+    /**
+    *   Set Parameter of the MTCNN
+    *   @param width input image width for the Detect().
+    *   @param height input image height for the Detect().
+    *   @param type input image format for the Detect().
+    *   @param iMinFaceSize Smallest size of face we want to detect. Larger the iMinFaceSize, faster the algorithm.
+    *   @param fPyramidFactor scale decay rate between pyramid layer.
+    */
+    void SetParam(unsigned int width, unsigned int height, imageType type = eBGR, 
+                  int iMinFaceSize = 90, float fPyramidFactor = 0.709);
+
+    /**
+    *   Detect face in the image
+    *   @param img input image pointer, format of the image should be consistent with the SetParam().
+    *   @param result detection result.
+    */
+    void Detect(const unsigned char* src, std::vector<SMtcnnFace>& result);
 
 private:
+    //Resize bounding box coordinate back to the normal scale
     void ResizeFaceFromScale(ncnn::Mat score, ncnn::Mat location, std::vector<SFaceProposal>& boundingBox_, std::vector<SOrderScore>& bboxScore_, float scale);
+
     void Nms(std::vector<SFaceProposal> &boundingBox_, std::vector<SOrderScore> &bboxScore_, const float overlap_threshold, std::string modelname = "Union");
     void RefineAndSquareBbox(std::vector<SFaceProposal> &vecBbox, const int &height, const int &width);
     void ConvertToSMtcnnFace(const std::vector<SFaceProposal>& src, std::vector<SMtcnnFace>& dst);
     std::vector<float> GetPyramidScale(unsigned int width, unsigned int height, int iMinFaceSize, float fPyramidFactor);
 
+    //Stage 1 in the paper
     std::vector<SFaceProposal> PNetWithPyramid(const ncnn::Mat& img, const std::vector<float> pyramidScale);
-    std::vector<SFaceProposal> RNet(const ncnn::Mat& img, const std::vector<SFaceProposal> PNetResult);
-    std::vector<SFaceProposal> ONet(const ncnn::Mat& img, const std::vector<SFaceProposal> RNetResult);
 
+    //Stage 2 in the paper
+    std::vector<SFaceProposal> RNet(const ncnn::Mat& img, const std::vector<SFaceProposal> PNetResult);
+
+    //Stage 3 in the paper
+    std::vector<SFaceProposal> ONet(const ncnn::Mat& img, const std::vector<SFaceProposal> RNetResult);
 
 private:
     ncnn::Net m_Pnet;

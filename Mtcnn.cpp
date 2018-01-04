@@ -398,9 +398,9 @@ void CMtcnn::RefineAndSquareBbox(vector<SFaceProposal> &vecBbox, const int &heig
     }
 }
 
-void CMtcnn::Detect(const unsigned char* img, std::vector<SMtcnnFace>& result)
+void CMtcnn::Detect(const unsigned char* src, std::vector<SMtcnnFace>& result)
 {
-    ncnn::Mat ncnnImg = ncnn::Mat::from_pixels(img, GetNcnnImageConvertType(eBGR), m_ImgWidth, m_ImgHeight);
+    ncnn::Mat ncnnImg = ncnn::Mat::from_pixels(src, GetNcnnImageConvertType(eBGR), m_ImgWidth, m_ImgHeight);
     ncnnImg.substract_mean_normalize(m_mean_vals, m_norm_vals);
 
     std::vector<SFaceProposal> firstBbox = PNetWithPyramid(ncnnImg, m_pyramidScale);
