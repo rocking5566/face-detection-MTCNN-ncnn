@@ -5,10 +5,10 @@
 
 using namespace std;
 
-const float m_nmsThreshold[3] = { 0.5f, 0.7f, 0.7f };
-const float m_threshold[3] = { 0.6f, 0.6f, 0.6f };
-const float m_mean_vals[3] = { 127.5, 127.5, 127.5 };
-const float m_norm_vals[3] = { 0.0078125, 0.0078125, 0.0078125 };
+const float nmsOverlapThreshold[3] = { 0.5f, 0.7f, 0.7f };
+const float faceScoreThreshold[3] = { 0.6f, 0.6f, 0.6f };
+const float normalizeImageMean[3] = { 127.5, 127.5, 127.5 };
+const float normalizeImageScale[3] = { 0.0078125, 0.0078125, 0.0078125 };
 
 bool cmpScore(SOrderScore lsh, SOrderScore rsh)
 {
@@ -122,7 +122,7 @@ std::vector<SFaceProposal> CMtcnn::PNetWithPyramid(const ncnn::Mat& img, const s
         ex.extract("prob1", nnFaceScore);
         ex.extract("conv4-2", nnFaceBoundingBox);
         ResizeFaceFromScale(nnFaceScore, nnFaceBoundingBox, faceRegions, faceScore, m_pyramidScale[i]);
-        Nms(faceRegions, faceScore, m_nmsThreshold[0]);
+        Nms(faceRegions, faceScore, nmsOverlapThreshold[0]);
 
         for (vector<SFaceProposal>::iterator it = faceRegions.begin(); it != faceRegions.end(); it++)
         {
@@ -138,7 +138,7 @@ std::vector<SFaceProposal> CMtcnn::PNetWithPyramid(const ncnn::Mat& img, const s
 
     if (!firstOrderScore.empty())
     {
-        Nms(firstBbox, firstOrderScore, m_nmsThreshold[0]);
+        Nms(firstBbox, firstOrderScore, nmsOverlapThreshold[0]);
         RefineAndSquareBbox(firstBbox, m_ImgFormat.height, m_ImgFormat.width);
     }
 
@@ -169,7 +169,7 @@ std::vector<SFaceProposal> CMtcnn::RNet(const ncnn::Mat& img, const std::vector<
             ex.extract("prob1", score);
             ex.extract("conv5-2", bbox);
 
-            if (*(score.data + score.cstep)>m_threshold[1])
+            if (*(score.data + score.cstep)>faceScoreThreshold[1])
             {
                 SFaceProposal metadata = *it;
 
@@ -188,7 +188,7 @@ std::vector<SFaceProposal> CMtcnn::RNet(const ncnn::Mat& img, const std::vector<
 
     if (!secondBboxScore.empty())
     {
-        Nms(secondBbox, secondBboxScore, m_nmsThreshold[1]);
+        Nms(secondBbox, secondBboxScore, nmsOverlapThreshold[1]);
         RefineAndSquareBbox(secondBbox, m_ImgFormat.height, m_ImgFormat.width);
     }
 
@@ -219,7 +219,7 @@ std::vector<SFaceProposal> CMtcnn::ONet(const ncnn::Mat& img, const std::vector<
             ex.extract("prob1", score);
             ex.extract("conv6-2", bbox);
             ex.extract("conv6-3", keyPoint);
-            if (score.channel(1)[0] > m_threshold[2])
+            if (score.channel(1)[0] > faceScoreThreshold[2])
             {
                 SFaceProposal metadata = *it;
 
@@ -244,7 +244,7 @@ std::vector<SFaceProposal> CMtcnn::ONet(const ncnn::Mat& img, const std::vector<
     if (!thirdBboxScore.empty())
     {
         RefineAndSquareBbox(thirdBbox, m_ImgFormat.height, m_ImgFormat.width);
-        Nms(thirdBbox, thirdBboxScore, m_nmsThreshold[2], "Min");
+        Nms(thirdBbox, thirdBboxScore, nmsOverlapThreshold[2], "Min");
     }
 
     return std::move(thirdBbox);
@@ -264,7 +264,7 @@ void CMtcnn::ResizeFaceFromScale(ncnn::Mat nnFaceScore, ncnn::Mat nnFaceBounding
     {
         for (int col = 0; col<nnFaceScore.w; col++)
         {
-            if (*p > m_threshold[0])
+            if (*p > faceScoreThreshold[0])
             {
                 faceRegion.score = *p;
                 order.score = *p;
@@ -286,15 +286,15 @@ void CMtcnn::ResizeFaceFromScale(ncnn::Mat nnFaceScore, ncnn::Mat nnFaceBounding
     }
 }
 
-void CMtcnn::Nms(std::vector<SFaceProposal> &boundingBox_, std::vector<SOrderScore> &bboxScore_, const float overlap_threshold, string modelname)
+void CMtcnn::Nms(std::vector<SFaceProposal> &faceRegions, std::vector<SOrderScore> &faceScores, const float overlap_threshold, string modelname)
 {
-    if (boundingBox_.empty())
+    if (faceRegions.empty())
     {
         return;
     }
     std::vector<int> heros;
     //sort the score
-    sort(bboxScore_.begin(), bboxScore_.end(), cmpScore);
+    sort(faceScores.begin(), faceScores.end(), cmpScore);
 
     int order = 0;
     float IOU = 0;
@@ -302,39 +302,43 @@ void CMtcnn::Nms(std::vector<SFaceProposal> &boundingBox_, std::vector<SOrderSco
     float maxY = 0;
     float minX = 0;
     float minY = 0;
-    while (bboxScore_.size()>0)
+    while (faceScores.size()>0)
     {
-        order = bboxScore_.back().oriOrder;
-        bboxScore_.pop_back();
+        order = faceScores.back().oriOrder;
+        faceScores.pop_back();
         if (order<0)continue;
-        if (boundingBox_.at(order).bExist == false) continue;
+        if (faceRegions.at(order).bExist == false) continue;
         heros.push_back(order);
-        boundingBox_.at(order).bExist = false;//delete it
+        faceRegions.at(order).bExist = false;//delete it
 
-        for (int num = 0; num<boundingBox_.size(); num++)
+        for (int num = 0; num < faceRegions.size(); num++)
         {
-            if (boundingBox_.at(num).bExist)
+            if (faceRegions.at(num).bExist)
             {
                 //the iou
-                maxX = (boundingBox_.at(num).x1>boundingBox_.at(order).x1) ? boundingBox_.at(num).x1 : boundingBox_.at(order).x1;
-                maxY = (boundingBox_.at(num).y1>boundingBox_.at(order).y1) ? boundingBox_.at(num).y1 : boundingBox_.at(order).y1;
-                minX = (boundingBox_.at(num).x2<boundingBox_.at(order).x2) ? boundingBox_.at(num).x2 : boundingBox_.at(order).x2;
-                minY = (boundingBox_.at(num).y2<boundingBox_.at(order).y2) ? boundingBox_.at(num).y2 : boundingBox_.at(order).y2;
+                maxX = (faceRegions.at(num).x1>faceRegions.at(order).x1) ? faceRegions.at(num).x1 : faceRegions.at(order).x1;
+                maxY = (faceRegions.at(num).y1>faceRegions.at(order).y1) ? faceRegions.at(num).y1 : faceRegions.at(order).y1;
+                minX = (faceRegions.at(num).x2<faceRegions.at(order).x2) ? faceRegions.at(num).x2 : faceRegions.at(order).x2;
+                minY = (faceRegions.at(num).y2<faceRegions.at(order).y2) ? faceRegions.at(num).y2 : faceRegions.at(order).y2;
+
                 //maxX1 and maxY1 reuse 
                 maxX = ((minX - maxX + 1)>0) ? (minX - maxX + 1) : 0;
                 maxY = ((minY - maxY + 1)>0) ? (minY - maxY + 1) : 0;
+
                 //IOU reuse for the area of two bbox
                 IOU = maxX * maxY;
+
                 if (!modelname.compare("Union"))
-                    IOU = IOU / (boundingBox_.at(num).area + boundingBox_.at(order).area - IOU);
+                    IOU = IOU / (faceRegions.at(num).area + faceRegions.at(order).area - IOU);
                 else if (!modelname.compare("Min"))
                 {
-                    IOU = IOU / ((boundingBox_.at(num).area<boundingBox_.at(order).area) ? boundingBox_.at(num).area : boundingBox_.at(order).area);
+                    IOU = IOU / ((faceRegions.at(num).area<faceRegions.at(order).area) ? faceRegions.at(num).area : faceRegions.at(order).area);
                 }
-                if (IOU>overlap_threshold)
+
+                if (IOU > overlap_threshold)
                 {
-                    boundingBox_.at(num).bExist = false;
-                    for (vector<SOrderScore>::iterator it = bboxScore_.begin(); it != bboxScore_.end(); it++)
+                    faceRegions.at(num).bExist = false;
+                    for (vector<SOrderScore>::iterator it = faceScores.begin(); it != faceScores.end(); it++)
                     {
                         if ((*it).oriOrder == num)
                         {
@@ -346,8 +350,9 @@ void CMtcnn::Nms(std::vector<SFaceProposal> &boundingBox_, std::vector<SOrderSco
             }
         }
     }
+
     for (int i = 0; i<heros.size(); i++)
-        boundingBox_.at(heros.at(i)).bExist = true;
+        faceRegions.at(heros.at(i)).bExist = true;
 }
 
 void CMtcnn::RefineAndSquareBbox(vector<SFaceProposal> &vecBbox, const int &height, const int &width)
@@ -396,7 +401,7 @@ void CMtcnn::RefineAndSquareBbox(vector<SFaceProposal> &vecBbox, const int &heig
 void CMtcnn::Detect(const unsigned char* src, std::vector<SMtcnnFace>& result)
 {
     ncnn::Mat ncnnImg = ncnn::Mat::from_pixels(src, GetNcnnImageConvertType(m_ImgFormat.type), m_ImgFormat.width, m_ImgFormat.height);
-    ncnnImg.substract_mean_normalize(m_mean_vals, m_norm_vals);
+    ncnnImg.substract_mean_normalize(normalizeImageMean, normalizeImageScale);
 
     std::vector<SFaceProposal> firstBbox = PNetWithPyramid(ncnnImg, m_pyramidScale);
     std::vector<SFaceProposal> secondBbox = RNet(ncnnImg, firstBbox);
