@@ -22,7 +22,7 @@ int GetNcnnImageConvertType(imageType type)
 {
     switch (type)
     {
-    case eBGR:
+    case eBGR888:
     default:
         return ncnn::Mat::PIXEL_BGR2RGB;
 
@@ -30,7 +30,7 @@ int GetNcnnImageConvertType(imageType type)
 }
 
 CMtcnn::CMtcnn()
-    : m_ImgType(eBGR)
+    : m_ImgType(eBGR888)
     , m_ImgWidth(0)
     , m_ImgHeight(0)
 {
@@ -50,7 +50,7 @@ void CMtcnn::LoadModel(const char* pNetStructPath, const char* pNetWeightPath, c
     m_Onet.load_model(oNetWeightPath);
 }
 
-void CMtcnn::SetParam(unsigned int width, unsigned int height, imageType type /*= eBGR*/, int iMinFaceSize /*= 90*/, float fPyramidFactor /*= 0.709*/)
+void CMtcnn::SetParam(unsigned int width, unsigned int height, imageType type /*= eBGR888*/, int iMinFaceSize /*= 90*/, float fPyramidFactor /*= 0.709*/)
 {
     m_ImgWidth = width;
     m_ImgHeight = height;
@@ -400,7 +400,7 @@ void CMtcnn::RefineAndSquareBbox(vector<SFaceProposal> &vecBbox, const int &heig
 
 void CMtcnn::Detect(const unsigned char* src, std::vector<SMtcnnFace>& result)
 {
-    ncnn::Mat ncnnImg = ncnn::Mat::from_pixels(src, GetNcnnImageConvertType(eBGR), m_ImgWidth, m_ImgHeight);
+    ncnn::Mat ncnnImg = ncnn::Mat::from_pixels(src, GetNcnnImageConvertType(eBGR888), m_ImgWidth, m_ImgHeight);
     ncnnImg.substract_mean_normalize(m_mean_vals, m_norm_vals);
 
     std::vector<SFaceProposal> firstBbox = PNetWithPyramid(ncnnImg, m_pyramidScale);

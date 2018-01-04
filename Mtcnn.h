@@ -33,7 +33,7 @@ struct SOrderScore
 
 enum imageType
 {
-    eBGR
+    eBGR888    /**< The image is stored using a 24-bit BGR format (8-8-8). */  
 };
 
 class CMtcnn
@@ -62,7 +62,7 @@ public:
     *   @param iMinFaceSize Smallest size of face we want to detect. Larger the iMinFaceSize, faster the algorithm.
     *   @param fPyramidFactor scale decay rate between pyramid layer.
     */
-    void SetParam(unsigned int width, unsigned int height, imageType type = eBGR, 
+    void SetParam(unsigned int width, unsigned int height, imageType type = eBGR888, 
                   int iMinFaceSize = 90, float fPyramidFactor = 0.709);
 
     /**
