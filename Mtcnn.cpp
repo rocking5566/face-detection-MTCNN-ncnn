@@ -81,6 +81,159 @@ std::vector<float> CMtcnn::GetPyramidScale(unsigned int width, unsigned int heig
 
     return std::move(retScale);
 }
+
+std::vector<SBoundingBox> CMtcnn::PNetWithPyramid(const ncnn::Mat& img, const std::vector<float> pyramidScale)
+{
+    std::vector<SBoundingBox> firstBbox;
+    std::vector<SOrderScore> firstOrderScore;
+    SOrderScore order;
+
+    for (size_t i = 0; i < m_pyramidScale.size(); ++i)
+    {
+        ncnn::Mat score;
+        ncnn::Mat location;
+        std::vector<SBoundingBox> boundingBox;
+        std::vector<SOrderScore> bboxScore;
+
+        int hs = (int)ceil(m_ImgHeight * m_pyramidScale[i]);
+        int ws = (int)ceil(m_ImgWidth * m_pyramidScale[i]);
+        ncnn::Mat pyramidImg;
+        resize_bilinear(img, pyramidImg, ws, hs);
+        ncnn::Extractor ex = m_Pnet.create_extractor();
+        ex.set_light_mode(true);
+        // [TODO] - Check if need to set_num_threads
+        ex.input("data", pyramidImg);
+        ex.extract("prob1", score);
+        ex.extract("conv4-2", location);
+        GenerateBbox(score, location, boundingBox, bboxScore, m_pyramidScale[i]);
+        Nms(boundingBox, bboxScore, m_nmsThreshold[0]);
+
+        for (vector<SBoundingBox>::iterator it = boundingBox.begin(); it != boundingBox.end(); it++)
+        {
+            if ((*it).bExist)
+            {
+                firstBbox.push_back(*it);
+                order.score = (*it).score;
+                order.oriOrder = firstOrderScore.size();
+                firstOrderScore.push_back(order);
+            }
+        }
+    }
+
+    if (!firstOrderScore.empty())
+    {
+        Nms(firstBbox, firstOrderScore, m_nmsThreshold[0]);
+        RefineAndSquareBbox(firstBbox, m_ImgHeight, m_ImgWidth);
+    }
+
+    return std::move(firstBbox);
+}
+
+std::vector<SBoundingBox> CMtcnn::RNet(const ncnn::Mat& img, const std::vector<SBoundingBox> PNetResult)
+{
+    std::vector<SBoundingBox> secondBbox;
+    std::vector<SOrderScore> secondBboxScore;
+    SOrderScore order;
+
+    for (vector<SBoundingBox>::const_iterator it = PNetResult.begin(); it != PNetResult.end(); it++)
+    {
+        if ((*it).bExist)
+        {
+            ncnn::Mat tempImg;
+            ncnn::Mat ncnnImg24;
+            ncnn::Mat score;
+            ncnn::Mat bbox;
+
+            copy_cut_border(img, tempImg, (*it).y1, m_ImgHeight - (*it).y2, (*it).x1, m_ImgWidth - (*it).x2);
+            resize_bilinear(tempImg, ncnnImg24, 24, 24);
+            ncnn::Extractor ex = m_Rnet.create_extractor();
+            ex.set_light_mode(true);
+            // [TODO] - Check if need to set_num_threads
+            ex.input("data", ncnnImg24);
+            ex.extract("prob1", score);
+            ex.extract("conv5-2", bbox);
+
+            if (*(score.data + score.cstep)>m_threshold[1])
+            {
+                SBoundingBox metadata = *it;
+
+                for (int boxAxis = 0; boxAxis < 4; boxAxis++)
+                    metadata.regreCoord[boxAxis] = bbox.channel(boxAxis)[0];    //*(bbox.data+channel*bbox.cstep);
+
+                metadata.area = (metadata.x2 - metadata.x1) * (metadata.y2 - metadata.y1);
+                metadata.score = score.channel(1)[0];   //*(score.data+score.cstep);
+                secondBbox.push_back(metadata);
+                order.score = it->score;
+                order.oriOrder = secondBboxScore.size();
+                secondBboxScore.push_back(order);
+            }
+        }
+    }
+
+    if (!secondBboxScore.empty())
+    {
+        Nms(secondBbox, secondBboxScore, m_nmsThreshold[1]);
+        RefineAndSquareBbox(secondBbox, m_ImgHeight, m_ImgWidth);
+    }
+
+    return std::move(secondBbox);
+}
+
+std::vector<SBoundingBox> CMtcnn::ONet(const ncnn::Mat& img, const std::vector<SBoundingBox> RNetResult)
+{
+    std::vector<SBoundingBox> thirdBbox;
+    std::vector<SOrderScore> thirdBboxScore;
+    SOrderScore order;
+
+    for (vector<SBoundingBox>::const_iterator it = RNetResult.begin(); it != RNetResult.end(); it++)
+    {
+        if ((*it).bExist)
+        {
+            ncnn::Mat tempImg;
+            ncnn::Mat ncnnImg48;
+            ncnn::Mat score;
+            ncnn::Mat bbox;
+            ncnn::Mat keyPoint;
+
+            copy_cut_border(img, tempImg, (*it).y1, m_ImgHeight - (*it).y2, (*it).x1, m_ImgWidth - (*it).x2);
+            resize_bilinear(tempImg, ncnnImg48, 48, 48);
+            ncnn::Extractor ex = m_Onet.create_extractor();
+            ex.set_light_mode(true);
+            ex.input("data", ncnnImg48);
+            ex.extract("prob1", score);
+            ex.extract("conv6-2", bbox);
+            ex.extract("conv6-3", keyPoint);
+            if (score.channel(1)[0] > m_threshold[2])
+            {
+                SBoundingBox metadata = *it;
+
+                for (int channel = 0; channel < 4; channel++)
+                    metadata.regreCoord[channel] = bbox.channel(channel)[0];
+                metadata.area = (metadata.x2 - metadata.x1) * (metadata.y2 - metadata.y1);
+                metadata.score = score.channel(1)[0];
+                for (int num = 0; num < 5; num++)
+                {
+                    (metadata.ppoint)[num] = metadata.x1 + (metadata.x2 - metadata.x1)*keyPoint.channel(num)[0];
+                    (metadata.ppoint)[num + 5] = metadata.y1 + (metadata.y2 - metadata.y1)*keyPoint.channel(num + 5)[0];
+                }
+
+                thirdBbox.push_back(metadata);
+                order.score = metadata.score;
+                order.oriOrder = thirdBboxScore.size();
+                thirdBboxScore.push_back(order);
+            }
+        }
+    }
+
+    if (!thirdBboxScore.empty())
+    {
+        RefineAndSquareBbox(thirdBbox, m_ImgHeight, m_ImgWidth);
+        Nms(thirdBbox, thirdBboxScore, m_nmsThreshold[2], "Min");
+    }
+
+    return std::move(thirdBbox);
+}
+
 void CMtcnn::GenerateBbox(ncnn::Mat score, ncnn::Mat location, std::vector<SBoundingBox>& boundingBox_, std::vector<SOrderScore>& bboxScore_, float scale)
 {
     int stride = 2;
@@ -224,146 +377,13 @@ void CMtcnn::RefineAndSquareBbox(vector<SBoundingBox> &vecBbox, const int &heigh
 
 void CMtcnn::Detect(const unsigned char* img, std::vector<SBoundingBox>& result)
 {
-    std::vector<SBoundingBox> firstBbox;
-    std::vector<SBoundingBox> secondBbox;
-    std::vector<SBoundingBox> thirdBbox;
-    std::vector<SOrderScore> firstOrderScore;
-    std::vector<SOrderScore> secondBboxScore;
-    std::vector<SOrderScore> thirdBboxScore;
 
     ncnn::Mat ncnnImg = ncnn::Mat::from_pixels(img, GetNcnnImageConvertType(eBGR), m_ImgWidth, m_ImgHeight);
     ncnnImg.substract_mean_normalize(m_mean_vals, m_norm_vals);
 
-    SOrderScore order;
+    std::vector<SBoundingBox> firstBbox = PNetWithPyramid(ncnnImg, m_pyramidScale);
+    std::vector<SBoundingBox> secondBbox = RNet(ncnnImg, firstBbox);
+    std::vector<SBoundingBox> thirdBbox = ONet(ncnnImg, secondBbox);
 
-    //First stage
-    for (size_t i = 0; i < m_pyramidScale.size(); ++i)
-    {
-        ncnn::Mat score;
-        ncnn::Mat location;
-        std::vector<SBoundingBox> boundingBox;
-        std::vector<SOrderScore> bboxScore;
-
-        int hs = (int)ceil(m_ImgHeight * m_pyramidScale[i]);
-        int ws = (int)ceil(m_ImgWidth * m_pyramidScale[i]);
-        ncnn::Mat pyramidImg;
-        resize_bilinear(ncnnImg, pyramidImg, ws, hs);
-        ncnn::Extractor ex = m_Pnet.create_extractor();
-        ex.set_light_mode(true);
-        // [TODO] - Check if need to set_num_threads
-        ex.input("data", pyramidImg);
-        ex.extract("prob1", score);
-        ex.extract("conv4-2", location);
-        GenerateBbox(score, location, boundingBox, bboxScore, m_pyramidScale[i]);
-        Nms(boundingBox, bboxScore, m_nmsThreshold[0]);
-
-        for (vector<SBoundingBox>::iterator it = boundingBox.begin(); it != boundingBox.end(); it++)
-        {
-            if ((*it).bExist)
-            {
-                firstBbox.push_back(*it);
-                order.score = (*it).score;
-                order.oriOrder = firstOrderScore.size();
-                firstOrderScore.push_back(order);
-            }
-        }
-    }
-
-    if (firstOrderScore.empty())
-        return;
-
-    Nms(firstBbox, firstOrderScore, m_nmsThreshold[0]);
-    RefineAndSquareBbox(firstBbox, m_ImgHeight, m_ImgWidth);
-
-    //second stage
-    for (vector<SBoundingBox>::iterator it = firstBbox.begin(); it != firstBbox.end(); it++)
-    {
-        if ((*it).bExist)
-        {
-            ncnn::Mat tempImg;
-            ncnn::Mat ncnnImg24;
-            ncnn::Mat score;
-            ncnn::Mat bbox;
-
-            copy_cut_border(ncnnImg, tempImg, (*it).y1, m_ImgHeight - (*it).y2, (*it).x1, m_ImgWidth - (*it).x2);
-            resize_bilinear(tempImg, ncnnImg24, 24, 24);
-            ncnn::Extractor ex = m_Rnet.create_extractor();
-            ex.set_light_mode(true);
-            // [TODO] - Check if need to set_num_threads
-            ex.input("data", ncnnImg24);
-            ex.extract("prob1", score);
-            ex.extract("conv5-2", bbox);
-
-            if (*(score.data + score.cstep)>m_threshold[1])
-            {
-                for (int channel = 0; channel<4; channel++)
-                    it->regreCoord[channel] = bbox.channel(channel)[0];//*(bbox.data+channel*bbox.cstep);
-
-                it->area = (it->x2 - it->x1)*(it->y2 - it->y1);
-                it->score = score.channel(1)[0];//*(score.data+score.cstep);
-                secondBbox.push_back(*it);
-                order.score = it->score;
-                order.oriOrder = secondBboxScore.size();
-                secondBboxScore.push_back(order);
-            }
-            else
-            {
-                (*it).bExist = false;
-            }
-        }
-    }
-
-    if (secondBboxScore.empty())
-        return;
-
-    Nms(secondBbox, secondBboxScore, m_nmsThreshold[1]);
-    RefineAndSquareBbox(secondBbox, m_ImgHeight, m_ImgWidth);
-
-    //third stage
-    for (vector<SBoundingBox>::iterator it = secondBbox.begin(); it != secondBbox.end(); it++)
-    {
-        if ((*it).bExist)
-        {
-            ncnn::Mat tempImg;
-            ncnn::Mat ncnnImg48;
-            ncnn::Mat score;
-            ncnn::Mat bbox;
-            ncnn::Mat keyPoint;
-
-            copy_cut_border(ncnnImg, tempImg, (*it).y1, m_ImgHeight - (*it).y2, (*it).x1, m_ImgWidth - (*it).x2);
-            resize_bilinear(tempImg, ncnnImg48, 48, 48);
-            ncnn::Extractor ex = m_Onet.create_extractor();
-            ex.set_light_mode(true);
-            ex.input("data", ncnnImg48);
-            ex.extract("prob1", score);
-            ex.extract("conv6-2", bbox);
-            ex.extract("conv6-3", keyPoint);
-            if (score.channel(1)[0] > m_threshold[2])
-            {
-                for (int channel = 0; channel < 4; channel++)
-                    it->regreCoord[channel] = bbox.channel(channel)[0];
-                it->area = (it->x2 - it->x1)*(it->y2 - it->y1);
-                it->score = score.channel(1)[0];
-                for (int num = 0; num < 5; num++)
-                {
-                    (it->ppoint)[num] = it->x1 + (it->x2 - it->x1)*keyPoint.channel(num)[0];
-                    (it->ppoint)[num + 5] = it->y1 + (it->y2 - it->y1)*keyPoint.channel(num + 5)[0];
-                }
-
-                thirdBbox.push_back(*it);
-                order.score = it->score;
-                order.oriOrder = thirdBboxScore.size();
-                thirdBboxScore.push_back(order);
-            }
-            else
-                (*it).bExist = false;
-        }
-    }
-
-    if (thirdBboxScore.empty())
-        return;
-
-    RefineAndSquareBbox(thirdBbox, m_ImgHeight, m_ImgWidth);
-    Nms(thirdBbox, thirdBboxScore, m_nmsThreshold[2], "Min");
-    result = thirdBbox;
+    result = std::move(thirdBbox);
 }

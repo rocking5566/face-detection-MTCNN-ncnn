@@ -48,6 +48,10 @@ private:
     void RefineAndSquareBbox(std::vector<SBoundingBox> &vecBbox, const int &height, const int &width);
 
     std::vector<float> GetPyramidScale(unsigned int width, unsigned int height, int iMinSize, float fPyramidFactor);
+    std::vector<SBoundingBox> PNetWithPyramid(const ncnn::Mat& img, const std::vector<float> pyramidScale);
+    std::vector<SBoundingBox> RNet(const ncnn::Mat& img, const std::vector<SBoundingBox> PNetResult);
+    std::vector<SBoundingBox> ONet(const ncnn::Mat& img, const std::vector<SBoundingBox> RNetResult);
+
 
 private:
     ncnn::Net m_Pnet;
