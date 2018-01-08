@@ -21,10 +21,11 @@ int GetNcnnImageConvertType(imageType type)
 {
     switch (type)
     {
+	case eRGB888:
+        return ncnn::Mat::PIXEL_RGB;
     case eBGR888:
     default:
         return ncnn::Mat::PIXEL_BGR2RGB;
-
     }
 }
 
