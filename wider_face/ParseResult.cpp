@@ -208,5 +208,4 @@ int main()
     ParseGroundResult(groundTruthPath, gtList);
     MatchGroundTruth(gtList, algoOutputPath, output);
     ExportResultToCsv("EstimationResult.csv", output);
-    system("pause");
 }
