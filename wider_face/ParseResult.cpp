@@ -8,9 +8,9 @@
 #define NUMBER_OF_WIDER_FACE_EVENT_CATEGORY 62
 #define DETECTION_THRESHOLD 0.6
 
-#define ALTORITHM_RESULT_PATH "all-result-80.txt"
+#define ALTORITHM_RESULT_PATH "all-result-120.txt"
 #define GROUND_TRUTH_PATH  "D:/data/face detection/wider_face/full/wider_face_split/wider_face_val_bbx_gt.txt"
-#define ESTIMATION_RESULT "EstimationResult-80.csv"
+#define ESTIMATION_RESULT "EstimationResult-120.csv"
 
 using namespace std;
 

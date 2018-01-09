@@ -8,9 +8,9 @@
 using namespace std;
 using namespace cv;
 
-#define MIN_FACE_SIZE 90
-#define OUTPUT_FILE_PATH "result-90.txt"
-#define WIDER_FACE_ROOT "D:/data/face detection/wider_face/FaceDetector_ImageSet"
+#define MIN_FACE_SIZE 120
+#define OUTPUT_FILE_PATH "all-result-120.txt"
+#define WIDER_FACE_ROOT "D:/data/face detection/wider_face/full/WIDER_val/images"
 
 vector<string> ParseWiderFaceDir(const std::string root)
 {
