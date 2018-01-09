@@ -8,6 +8,10 @@
 using namespace std;
 using namespace cv;
 
+#define MIN_FACE_SIZE 90
+#define OUTPUT_FILE_PATH "result-90.txt"
+#define WIDER_FACE_ROOT "D:/data/face detection/wider_face/FaceDetector_ImageSet"
+
 vector<string> ParseWiderFaceDir(const std::string root)
 {
     vector<string> ret;
@@ -40,7 +44,7 @@ vector<string> GetImgList(const std::string root)
 void WriteDetectionResult(const string& img_name, const vector<SMtcnnFace>& reuslt)
 {
     fstream f;
-    f.open("result.txt", ios::app);
+    f.open(OUTPUT_FILE_PATH, ios::app);
     f << img_name << endl;
     f << reuslt.size() << endl;
 
@@ -66,7 +70,7 @@ int main(int argc, char** argv)
         "../../../model/det2.param", "../../../model/det2.bin",
         "../../../model/det3.param", "../../../model/det3.bin");
 
-    string widerFaceRoot = "D:/data/face detection/wider_face/FaceDetector_ImageSet";
+    string widerFaceRoot = WIDER_FACE_ROOT;
     vector<string> dirs = ParseWiderFaceDir(widerFaceRoot);
 
     for (int i = 0; i < dirs.size(); ++i)
@@ -80,7 +84,7 @@ int main(int argc, char** argv)
             Mat frame = imread(imgRoot + "/" + imgs[j]);
 
             SImageFormat format(frame.cols, frame.rows, eBGR888);
-            mtcnn.SetParam(format, 80, 0.709);
+            mtcnn.SetParam(format, MIN_FACE_SIZE, 0.709);
             double t1 = (double)getTickCount();
             mtcnn.Detect(frame.data, result);
             double t2 = (double)getTickCount();
