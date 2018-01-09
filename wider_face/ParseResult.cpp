@@ -8,6 +8,10 @@
 #define NUMBER_OF_WIDER_FACE_EVENT_CATEGORY 62
 #define DETECTION_THRESHOLD 0.6
 
+#define ALTORITHM_RESULT_PATH "all-result-80.txt"
+#define GROUND_TRUTH_PATH  "D:/data/face detection/wider_face/full/wider_face_split/wider_face_val_bbx_gt.txt"
+#define ESTIMATION_RESULT "EstimationResult-80.csv"
+
 using namespace std;
 
 struct BBox
@@ -200,8 +204,8 @@ void ExportResultToCsv(const string& sCsvPath, const SAnalyticResult* estimation
 
 int main()
 {
-    string algoOutputPath = "result.txt";
-    string groundTruthPath = "D:/data/face detection/wider_face/FaceDetector_ImageSet/_expected_results.txt";
+    string algoOutputPath = ALTORITHM_RESULT_PATH;
+    string groundTruthPath = GROUND_TRUTH_PATH;
     SAnalyticResult output[NUMBER_OF_WIDER_FACE_EVENT_CATEGORY];
     GroundTruthMap gtList[NUMBER_OF_WIDER_FACE_EVENT_CATEGORY];
 
@@ -209,5 +213,5 @@ int main()
 
     ParseGroundResult(groundTruthPath, gtList);
     MatchGroundTruth(gtList, algoOutputPath, output);
-    ExportResultToCsv("EstimationResult.csv", output);
+    ExportResultToCsv(ESTIMATION_RESULT, output);
 }
