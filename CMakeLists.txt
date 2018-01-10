@@ -25,7 +25,7 @@ if (UNIX OR ARM7)
 	else ()
 	    SET(NCNN_LIBS ${NCNN_DIR}/lib/linux/x64/gcc5.4/libncnn.a)
 	endif()
-endif (UNIX)
+endif ()
 
 set(CMAKE_BUILD_TYPE release)
 add_definitions(-fPIC)
