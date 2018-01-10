@@ -28,6 +28,7 @@ if (UNIX OR ARM7)
 endif ()
 
 set(CMAKE_BUILD_TYPE release)
+set (CMAKE_CXX_STANDARD 11)
 add_definitions(-fPIC)
 add_definitions(-Ofast)
 add_definitions(-ffast-math)
