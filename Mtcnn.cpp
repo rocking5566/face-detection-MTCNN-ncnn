@@ -9,6 +9,14 @@ const float nmsOverlapThreshold[3] = { 0.5f, 0.7f, 0.7f };
 const float normalizeImageMean[3] = { 127.5, 127.5, 127.5 };
 const float normalizeImageScale[3] = { 0.0078125, 0.0078125, 0.0078125 };
 
+inline int BoundaryCheck(int val, int min, int max)
+{
+    val = val > min ? val : min;
+    val = val < max ? val : max;
+
+    return val;
+};
+
 bool cmpScore(SOrderScore lsh, SOrderScore rsh)
 {
     if (lsh.score < rsh.score)
@@ -414,10 +422,21 @@ void CMtcnn::RefineAndSquareBbox(vector<SFaceProposal> &vecBbox, const int &heig
             (*it).y1 = round(y1);
 
             //boundary check
-            if ((*it).x1<0)(*it).x1 = 0;
-            if ((*it).y1<0)(*it).y1 = 0;
-            if ((*it).x2>width)(*it).x2 = width - 1;
-            if ((*it).y2>height)(*it).y2 = height - 1;
+            it->x1 = BoundaryCheck(it->x1, 0, width - 1);
+            it->y1 = BoundaryCheck(it->y1, 0, height - 1);
+            it->x2 = BoundaryCheck(it->x2, 0, width- 1);
+            it->y2 = BoundaryCheck(it->y2, 0, height - 1);
+
+            it->ppoint[0] = BoundaryCheck(it->ppoint[0], 0, width - 1);
+            it->ppoint[1] = BoundaryCheck(it->ppoint[1], 0, width - 1);
+            it->ppoint[2] = BoundaryCheck(it->ppoint[2], 0, width - 1);
+            it->ppoint[3] = BoundaryCheck(it->ppoint[3], 0, width - 1);
+            it->ppoint[4] = BoundaryCheck(it->ppoint[4], 0, width - 1);
+            it->ppoint[5] = BoundaryCheck(it->ppoint[5], 0, height - 1);
+            it->ppoint[6] = BoundaryCheck(it->ppoint[6], 0, height - 1);
+            it->ppoint[7] = BoundaryCheck(it->ppoint[7], 0, height - 1);
+            it->ppoint[8] = BoundaryCheck(it->ppoint[8], 0, height - 1);
+            it->ppoint[9] = BoundaryCheck(it->ppoint[9], 0, height - 1);
 
             it->area = (it->x2 - it->x1)*(it->y2 - it->y1);
         }
