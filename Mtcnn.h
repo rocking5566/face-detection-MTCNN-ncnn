@@ -93,7 +93,7 @@ private:
     void ResizeFaceFromScale(ncnn::Mat score, ncnn::Mat location, std::vector<SFaceProposal>& boundingBox_, std::vector<SOrderScore>& bboxScore_, float scale);
 
     void Nms(std::vector<SFaceProposal> &boundingBox_, std::vector<SOrderScore> &bboxScore_, const float overlap_threshold, std::string modelname = "Union");
-    void RefineAndSquareBbox(std::vector<SFaceProposal> &vecBbox, const int &height, const int &width);
+    void RefineBbox(std::vector<SFaceProposal> &vecBbox, const int &height, const int &width, bool bSquareBbox = false);
     void ConvertToSMtcnnFace(const std::vector<SFaceProposal>& src, std::vector<SMtcnnFace>& dst);
     std::vector<float> GetPyramidScale(unsigned int width, unsigned int height, int iMinFaceSize, float fPyramidFactor);
 

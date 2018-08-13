@@ -162,7 +162,7 @@ std::vector<SFaceProposal> CMtcnn::PNetWithPyramid(const ncnn::Mat& img, const s
     if (!firstOrderScore.empty())
     {
         Nms(firstBbox, firstOrderScore, nmsOverlapThreshold[0]);
-        RefineAndSquareBbox(firstBbox, m_ImgFormat.height, m_ImgFormat.width);
+        RefineBbox(firstBbox, m_ImgFormat.height, m_ImgFormat.width, false);
     }
 
     return std::move(firstBbox);
@@ -217,7 +217,7 @@ std::vector<SFaceProposal> CMtcnn::RNet(const ncnn::Mat& img, const std::vector<
     if (!secondBboxScore.empty())
     {
         Nms(secondBbox, secondBboxScore, nmsOverlapThreshold[1]);
-        RefineAndSquareBbox(secondBbox, m_ImgFormat.height, m_ImgFormat.width);
+        RefineBbox(secondBbox, m_ImgFormat.height, m_ImgFormat.width, false);
     }
 
     return std::move(secondBbox);
@@ -277,7 +277,7 @@ std::vector<SFaceProposal> CMtcnn::ONet(const ncnn::Mat& img, const std::vector<
 
     if (!thirdBboxScore.empty())
     {
-        RefineAndSquareBbox(thirdBbox, m_ImgFormat.height, m_ImgFormat.width);
+        RefineBbox(thirdBbox, m_ImgFormat.height, m_ImgFormat.width, true);
         Nms(thirdBbox, thirdBboxScore, nmsOverlapThreshold[2], "Min");
     }
 
@@ -389,7 +389,7 @@ void CMtcnn::Nms(std::vector<SFaceProposal> &faceRegions, std::vector<SOrderScor
         faceRegions.at(heros.at(i)).bExist = true;
 }
 
-void CMtcnn::RefineAndSquareBbox(vector<SFaceProposal> &vecBbox, const int &height, const int &width)
+void CMtcnn::RefineBbox(vector<SFaceProposal> &vecBbox, const int &height, const int &width, bool bSquareBbox)
 {
     if (vecBbox.empty())
     {
@@ -410,16 +410,26 @@ void CMtcnn::RefineAndSquareBbox(vector<SFaceProposal> &vecBbox, const int &heig
             x2 = (*it).x2 + (*it).regreCoord[2] * bbw;
             y2 = (*it).y2 + (*it).regreCoord[3] * bbh;
 
-            w = x2 - x1 + 1;
-            h = y2 - y1 + 1;
+            if (bSquareBbox)
+            {
+                w = x2 - x1 + 1;
+                h = y2 - y1 + 1;
 
-            maxSide = (h>w) ? h : w;
-            x1 = x1 + w*0.5 - maxSide*0.5;
-            y1 = y1 + h*0.5 - maxSide*0.5;
-            (*it).x2 = round(x1 + maxSide - 1);
-            (*it).y2 = round(y1 + maxSide - 1);
-            (*it).x1 = round(x1);
-            (*it).y1 = round(y1);
+                maxSide = (h > w) ? h : w;
+                x1 = x1 + w * 0.5 - maxSide * 0.5;
+                y1 = y1 + h * 0.5 - maxSide * 0.5;
+                (*it).x2 = round(x1 + maxSide - 1);
+                (*it).y2 = round(y1 + maxSide - 1);
+                (*it).x1 = round(x1);
+                (*it).y1 = round(y1);
+            }
+            else
+            {
+                (*it).x2 = round(x2);
+                (*it).y2 = round(y2);
+                (*it).x1 = round(x1);
+                (*it).y1 = round(y1);
+            }
 
             //boundary check
             it->x1 = BoundaryCheck(it->x1, 0, width - 1);
