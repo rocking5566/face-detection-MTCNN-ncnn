@@ -46,7 +46,6 @@ CMtcnn::CMtcnn()
     // https://github.com/kpzhang93/MTCNN_face_detection_alignment/tree/master/code/codes/MTCNNv1
 }
 
-
 void CMtcnn::LoadModel(const char* pNetStructPath, const char* pNetWeightPath, const char* rNetStructPath, const char* rNetWeightPath, const char* oNetStructPath, const char* oNetWeightPath)
 {
     m_Pnet.load_param(pNetStructPath);
@@ -132,7 +131,7 @@ std::vector<SFaceProposal> CMtcnn::PNetWithPyramid(const ncnn::Mat& img, const s
         int hs = (int)ceil(m_ImgFormat.height * m_pyramidScale[i]);
         int ws = (int)ceil(m_ImgFormat.width * m_pyramidScale[i]);
         ncnn::Mat pyramidImg;
-        resize_bilinear(img, pyramidImg, ws, hs);
+        resize_bilinear(img, pyramidImg, ws, hs, NULL, m_ThreadNum);
         ncnn::Extractor ex = m_Pnet.create_extractor();
         ex.set_light_mode(true);
 
@@ -182,9 +181,8 @@ std::vector<SFaceProposal> CMtcnn::RNet(const ncnn::Mat& img, const std::vector<
             ncnn::Mat ncnnImg24;
             ncnn::Mat score;
             ncnn::Mat bbox;
-
-            copy_cut_border(img, tempImg, (*it).y1, m_ImgFormat.height - (*it).y2, (*it).x1, m_ImgFormat.width - (*it).x2);
-            resize_bilinear(tempImg, ncnnImg24, 24, 24);
+            copy_cut_border(img, tempImg, (*it).y1, m_ImgFormat.height - (*it).y2, (*it).x1, m_ImgFormat.width - (*it).x2, NULL, m_ThreadNum);
+            resize_bilinear(tempImg, ncnnImg24, 24, 24, NULL, m_ThreadNum);
             ncnn::Extractor ex = m_Rnet.create_extractor();
             ex.set_light_mode(true);
 
@@ -197,12 +195,12 @@ std::vector<SFaceProposal> CMtcnn::RNet(const ncnn::Mat& img, const std::vector<
             ex.extract("prob1", score);
             ex.extract("conv5-2", bbox);
 
-            if (*(score.data + score.cstep)>m_FaceScoreThreshold[1])
+            if ((float)score[1] > m_FaceScoreThreshold[1])
             {
                 SFaceProposal metadata = *it;
 
                 for (int boxAxis = 0; boxAxis < 4; boxAxis++)
-                    metadata.regreCoord[boxAxis] = bbox.channel(boxAxis)[0];    //*(bbox.data+channel*bbox.cstep);
+                    metadata.regreCoord[boxAxis] = bbox[boxAxis];    //*(bbox.data+channel*bbox.cstep);
 
                 metadata.area = (metadata.x2 - metadata.x1) * (metadata.y2 - metadata.y1);
                 metadata.score = score.channel(1)[0];   //*(score.data+score.cstep);
@@ -240,7 +238,7 @@ std::vector<SFaceProposal> CMtcnn::ONet(const ncnn::Mat& img, const std::vector<
             ncnn::Mat keyPoint;
 
             copy_cut_border(img, tempImg, (*it).y1, m_ImgFormat.height - (*it).y2, (*it).x1, m_ImgFormat.width - (*it).x2);
-            resize_bilinear(tempImg, ncnnImg48, 48, 48);
+            resize_bilinear(tempImg, ncnnImg48, 48, 48, NULL, m_ThreadNum);
             ncnn::Extractor ex = m_Onet.create_extractor();
             ex.set_light_mode(true);
 
@@ -253,18 +251,18 @@ std::vector<SFaceProposal> CMtcnn::ONet(const ncnn::Mat& img, const std::vector<
             ex.extract("prob1", score);
             ex.extract("conv6-2", bbox);
             ex.extract("conv6-3", keyPoint);
-            if (score.channel(1)[0] > m_FaceScoreThreshold[2])
+            if (score[1] > m_FaceScoreThreshold[2])
             {
                 SFaceProposal metadata = *it;
 
                 for (int channel = 0; channel < 4; channel++)
-                    metadata.regreCoord[channel] = bbox.channel(channel)[0];
+                    metadata.regreCoord[channel] = bbox[channel];
                 metadata.area = (metadata.x2 - metadata.x1) * (metadata.y2 - metadata.y1);
-                metadata.score = score.channel(1)[0];
+                metadata.score = score[1];
                 for (int num = 0; num < 5; num++)
                 {
-                    (metadata.ppoint)[num] = metadata.x1 + (metadata.x2 - metadata.x1) * keyPoint.channel(num)[0];
-                    (metadata.ppoint)[num + 5] = metadata.y1 + (metadata.y2 - metadata.y1) * keyPoint.channel(num + 5)[0];
+                    (metadata.ppoint)[num] = metadata.x1 + (metadata.x2 - metadata.x1) * keyPoint[num];
+                    (metadata.ppoint)[num + 5] = metadata.y1 + (metadata.y2 - metadata.y1) * keyPoint[num + 5];
                 }
 
                 thirdBbox.push_back(metadata);
@@ -291,7 +289,6 @@ void CMtcnn::ResizeFaceFromScale(ncnn::Mat nnFaceScore, ncnn::Mat nnFaceBounding
     int count = 0;
     //score p
     float *p = nnFaceScore.channel(1);//score.data + score.cstep;
-    float *plocal = nnFaceBoundingBox.data;
     SFaceProposal faceRegion;
     SOrderScore order;
     for (int row = 0; row<nnFaceScore.h; row++)
@@ -315,7 +312,6 @@ void CMtcnn::ResizeFaceFromScale(ncnn::Mat nnFaceScore, ncnn::Mat nnFaceBounding
                 faceScores.push_back(order);
             }
             ++p;
-            ++plocal;
         }
     }
 }
