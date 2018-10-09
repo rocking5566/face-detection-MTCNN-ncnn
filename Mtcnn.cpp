@@ -161,7 +161,7 @@ std::vector<SFaceProposal> CMtcnn::PNetWithPyramid(const ncnn::Mat& img, const s
     if (!firstOrderScore.empty())
     {
         Nms(firstBbox, firstOrderScore, nmsOverlapThreshold[0]);
-        RefineBbox(firstBbox, m_ImgFormat.height, m_ImgFormat.width, false);
+        RefineBbox(firstBbox, m_ImgFormat.height, m_ImgFormat.width, true);
     }
 
     return std::move(firstBbox);
@@ -215,7 +215,7 @@ std::vector<SFaceProposal> CMtcnn::RNet(const ncnn::Mat& img, const std::vector<
     if (!secondBboxScore.empty())
     {
         Nms(secondBbox, secondBboxScore, nmsOverlapThreshold[1]);
-        RefineBbox(secondBbox, m_ImgFormat.height, m_ImgFormat.width, false);
+        RefineBbox(secondBbox, m_ImgFormat.height, m_ImgFormat.width, true);
     }
 
     return std::move(secondBbox);
