@@ -97,6 +97,8 @@ std::vector<float> CMtcnn::GetPyramidScale(unsigned int width, unsigned int heig
 void CMtcnn::ConvertToSMtcnnFace(const std::vector<SFaceProposal>& src, vector<SMtcnnFace>& dst)
 {
     SMtcnnFace tmpFace;
+    dst.clear();
+
     for (auto it = src.begin(); it != src.end(); it++)
     {
         if (it->bExist)
@@ -430,7 +432,7 @@ void CMtcnn::RefineBbox(vector<SFaceProposal> &vecBbox, const int &height, const
             //boundary check
             it->x1 = BoundaryCheck(it->x1, 0, width - 1);
             it->y1 = BoundaryCheck(it->y1, 0, height - 1);
-            it->x2 = BoundaryCheck(it->x2, 0, width- 1);
+            it->x2 = BoundaryCheck(it->x2, 0, width - 1);
             it->y2 = BoundaryCheck(it->y2, 0, height - 1);
 
             it->ppoint[0] = BoundaryCheck(it->ppoint[0], 0, width - 1);
