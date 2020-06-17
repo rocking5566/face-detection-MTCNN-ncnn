@@ -1,6 +1,7 @@
 SET(SRC
 	main.cpp
     Mtcnn.cpp
+    HeadPosePredictor.cpp
 )
 
 SET(NCNN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/packages/ncnn_20180830)
