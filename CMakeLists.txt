@@ -3,7 +3,7 @@ SET(SRC
     Mtcnn.cpp
 )
 
-SET(NCNN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/packages/ncnn_20171225)
+SET(NCNN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/packages/ncnn_20180830)
 
 if (WIN32)
 	SET(OpenCV_DIR C:/library/opencv-3.3.1/opencv/build)

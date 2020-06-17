@@ -79,7 +79,7 @@ public:
     */
     void SetParam(const SImageFormat& imgFormat,
                   int iMinFaceSize = 90, float fPyramidFactor = 0.709,
-                  int iThreadNum = -1, const float* faceScoreThreshold = NULL);
+                  int iThreadNum = 1, const float* faceScoreThreshold = NULL);
 
     /**
     *   Detect face in the image
